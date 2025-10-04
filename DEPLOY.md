@@ -1,336 +1,207 @@
-# 🚀 Guía de Despliegue - Flight Scan
+# Guía de Deployment en Streamlit Cloud
 
-Esta guía te ayudará a desplegar Flight Scan tanto localmente como en Streamlit Cloud.
+## 📋 Archivos Necesarios
 
-## 📋 Tabla de Contenidos
+Asegúrate de tener todos estos archivos en tu repositorio:
 
-1. [Despliegue Local](#despliegue-local)
-2. [Despliegue en Streamlit Cloud](#despliegue-en-streamlit-cloud)
-3. [Configuración de GitHub Actions](#configuración-de-github-actions)
-4. [Verificación y Pruebas](#verificación-y-pruebas)
-5. [Troubleshooting](#troubleshooting)
-
----
-
-## 🏠 Despliegue Local
-
-### Paso 1: Clonar el Repositorio
-
-```bash
-git clone https://github.com/alemeds/flight-scan.git
-cd flight-scan
+```
+flight-scan/
+├── app.py                    # ✅ LISTO
+├── database.py               # ✅ LISTO
+├── amadeus_client.py         # ✅ LISTO
+├── requirements.txt          # ✅ LISTO
+├── setup_database.py         # ✅ LISTO (opcional)
+├── monitor_script.py         # ✅ LISTO (opcional)
+└── README.md
 ```
 
-### Paso 2: Crear Entorno Virtual
+## 🚀 Pasos para Deploy en Streamlit Cloud
 
-**En Windows:**
-```bash
-python -m venv venv
-venv\Scripts\activate
+### 1. Preparar el Repositorio
+
+1. Sube todos los archivos a tu repositorio de GitHub
+2. **NO INCLUYAS** el archivo `.streamlit/secrets.toml` en GitHub
+3. Asegúrate de tener un archivo `.gitignore` con:
+
+```
+.streamlit/
+__pycache__/
+*.pyc
+.env
+venv/
+.DS_Store
 ```
 
-**En Mac/Linux:**
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-### Paso 3: Instalar Dependencias
-
-```bash
-pip install -r requirements.txt
-```
-
-### Paso 4: Configurar Credenciales
-
-1. Crea la carpeta `.streamlit`:
-```bash
-mkdir .streamlit
-```
-
-2. Crea el archivo `.streamlit/secrets.toml`:
-```bash
-# En Windows
-copy secrets.toml.example .streamlit\secrets.toml
-
-# En Mac/Linux
-cp secrets.toml.example .streamlit/secrets.toml
-```
-
-3. Edita `.streamlit/secrets.toml` con tus credenciales (ya están incluidas en el ejemplo)
-
-### Paso 5: Inicializar Base de Datos
-
-```bash
-python setup_database.py
-```
-
-Deberías ver:
-```
-✅ Conexión exitosa a PostgreSQL
-✅ Tablas creadas/verificadas correctamente
-```
-
-### Paso 6: Probar Conexiones
-
-```bash
-python test_connection.py
-```
-
-Este script verificará:
-- ✅ Conexión a PostgreSQL
-- ✅ Autenticación con Amadeus
-- ✅ Flujo completo (opcional)
-
-### Paso 7: Ejecutar la Aplicación
-
-```bash
-streamlit run app.py
-```
-
-La aplicación se abrirá en `http://localhost:8501`
-
----
-
-## ☁️ Despliegue en Streamlit Cloud
-
-### Requisitos Previos
-
-- Cuenta en [Streamlit Cloud](https://share.streamlit.io)
-- Repositorio en GitHub (ya tienes: alemeds/flight-scan)
-- Credenciales de PostgreSQL y Amadeus
-
-### Paso 1: Conectar Repositorio
+### 2. Configurar Streamlit Cloud
 
 1. Ve a [share.streamlit.io](https://share.streamlit.io)
-2. Haz clic en **"New app"**
-3. Conecta tu cuenta de GitHub si aún no lo has hecho
-4. Selecciona:
-   - **Repository**: `alemeds/flight-scan`
-   - **Branch**: `main`
-   - **Main file path**: `app.py`
+2. Inicia sesión con tu cuenta de GitHub
+3. Click en "New app"
+4. Selecciona tu repositorio `flight-scan`
+5. Branch: `main`
+6. Main file path: `app.py`
 
-### Paso 2: Configurar Secrets
+### 3. Configurar Secrets en Streamlit Cloud
 
-1. En la configuración de tu app, ve a **"Settings"**
-2. Haz clic en **"Secrets"**
-3. Copia y pega el siguiente contenido:
+En la configuración de la app en Streamlit Cloud:
+
+1. Ve a "Settings" → "Secrets"
+2. Copia y pega el siguiente contenido:
 
 ```toml
+# Database Configuration
 DB_HOST = "dpg-d3g6g1p5pdvs73e8c0rg-a.oregon-postgres.render.com"
 DB_PORT = 5432
 DB_NAME = "vuelos_9lrw"
 DB_USER = "vuelos"
 DB_PASSWORD = "FOa7NtnssHMgheHCMilCRXYmLYQn7pko"
 
+# Amadeus API Configuration
 AMADEUS_API_KEY = "KAomv16lpjbjJFAmj42OgXtzEOzCHHlx"
 AMADEUS_API_SECRET = "mwHaoM1gEV9bweN2"
 ```
 
-4. Haz clic en **"Save"**
+3. Click en "Save"
 
-### Paso 3: Desplegar
+### 4. Deploy
 
-1. Haz clic en **"Deploy!"**
-2. Espera a que se complete el despliegue (2-3 minutos)
-3. Tu app estará disponible en una URL como: `https://flight-scan-xxx.streamlit.app`
+1. Click en "Deploy!"
+2. Espera a que la aplicación se construya (2-3 minutos)
+3. ¡Tu app estará disponible en una URL pública!
 
-### Paso 4: Configuración Adicional (Opcional)
+## 🧪 Prueba Local (Opcional)
 
-En **Settings** → **General**:
-- **App name**: Flight Scan
-- **Description**: Monitor de tarifas aéreas
-- **Icon**: ✈️
-
----
-
-## ⚙️ Configuración de GitHub Actions
-
-Para habilitar el monitoreo automático cada 2 horas:
-
-### Paso 1: Agregar Secrets en GitHub
-
-1. Ve a tu repositorio: `github.com/alemeds/flight-scan`
-2. Settings → Secrets and variables → Actions
-3. Haz clic en **"New repository secret"**
-4. Agrega los siguientes secrets uno por uno:
-
-| Nombre | Valor |
-|--------|-------|
-| `DB_HOST` | `dpg-d3g6g1p5pdvs73e8c0rg-a.oregon-postgres.render.com` |
-| `DB_PORT` | `5432` |
-| `DB_NAME` | `vuelos_9lrw` |
-| `DB_USER` | `vuelos` |
-| `DB_PASSWORD` | `FOa7NtnssHMgheHCMilCRXYmLYQn7pko` |
-| `AMADEUS_API_KEY` | `KAomv16lpjbjJFAmj42OgXtzEOzCHHlx` |
-| `AMADEUS_API_SECRET` | `mwHaoM1gEV9bweN2` |
-
-### Paso 2: Habilitar GitHub Actions
-
-El archivo `.github/workflows/monitor.yml` ya está en el repositorio. GitHub Actions se activará automáticamente.
-
-### Paso 3: Verificar Ejecución
-
-1. Ve a la pestaña **"Actions"** en tu repositorio
-2. Deberías ver el workflow **"Flight Monitor Automático"**
-3. El workflow se ejecuta:
-   - Automáticamente cada 2 horas
-   - Manualmente desde la UI de GitHub (botón "Run workflow")
-
-### Paso 4: Ejecutar Manualmente (Opcional)
-
-1. Ve a Actions → Flight Monitor Automático
-2. Haz clic en **"Run workflow"**
-3. Selecciona la rama `main`
-4. Haz clic en **"Run workflow"**
-
----
-
-## ✅ Verificación y Pruebas
-
-### Verificar Base de Datos
-
-Conéctate a PostgreSQL para verificar los datos:
+Si quieres probar localmente antes de hacer deploy:
 
 ```bash
-PGPASSWORD=FOa7NtnssHMgheHCMilCRXYmLYQn7pko psql -h dpg-d3g6g1p5pdvs73e8c0rg-a.oregon-postgres.render.com -U vuelos vuelos_9lrw
-```
+# 1. Clonar repositorio
+git clone https://github.com/alemeds/flight-scan.git
+cd flight-scan
 
-Consultas útiles:
+# 2. Crear entorno virtual
+python -m venv venv
+source venv/bin/activate  # En Windows: venv\Scripts\activate
 
-```sql
--- Ver total de registros
-SELECT COUNT(*) FROM flight_searches;
-
--- Ver últimas búsquedas
-SELECT * FROM flight_searches ORDER BY search_timestamp DESC LIMIT 10;
-
--- Ver estadísticas por ruta
-SELECT origin, destination, 
-       COUNT(*) as searches,
-       MIN(price) as min_price,
-       AVG(price) as avg_price,
-       MAX(price) as max_price
-FROM flight_searches
-GROUP BY origin, destination
-ORDER BY searches DESC;
-```
-
-### Verificar API de Amadeus
-
-Ejecuta el script de prueba:
-
-```bash
-python test_connection.py
-```
-
-### Verificar Dashboard
-
-1. Abre la aplicación (local o en Streamlit Cloud)
-2. Realiza una búsqueda de prueba:
-   - Origen: EZE
-   - Destino: MIA
-   - Fecha: 30 días adelante
-3. Verifica que:
-   - ✅ Se muestran resultados
-   - ✅ Los datos se guardan en la BD
-   - ✅ Los gráficos se generan correctamente
-
----
-
-## 🔧 Troubleshooting
-
-### Error: "No module named 'streamlit'"
-
-**Solución**: Asegúrate de haber activado el entorno virtual e instalado las dependencias:
-
-```bash
-source venv/bin/activate  # o venv\Scripts\activate en Windows
+# 3. Instalar dependencias
 pip install -r requirements.txt
+
+# 4. Crear archivo de secrets
+mkdir .streamlit
+# Copia el contenido del template en .streamlit/secrets.toml
+
+# 5. Inicializar base de datos (opcional, ya está creada)
+python setup_database.py
+
+# 6. Ejecutar app
+streamlit run app.py
 ```
 
-### Error: "Connection refused" (PostgreSQL)
+## 🔍 Verificación Post-Deploy
 
-**Causas posibles**:
-1. Base de datos en Render inactiva
-2. IP no autorizada
-3. Credenciales incorrectas
+Una vez deployada la app, verifica:
 
-**Solución**:
-1. Verifica que la BD esté activa en Render
-2. Render permite conexiones desde cualquier IP por defecto
-3. Verifica las credenciales en `secrets.toml`
+1. ✅ La página carga sin errores
+2. ✅ Puedes hacer una búsqueda de vuelos
+3. ✅ Los resultados se guardan en la base de datos
+4. ✅ Las visualizaciones funcionan correctamente
+5. ✅ El historial muestra datos
 
-### Error: "401 Unauthorized" (Amadeus)
+## ⚠️ Solución de Problemas
 
-**Solución**: Verifica que `AMADEUS_API_KEY` y `AMADEUS_API_SECRET` sean correctos.
+### Error: "Could not connect to database"
+- Verifica que las credenciales en Secrets sean correctas
+- Asegúrate de que la base de datos en Render esté activa
 
-### Error: "No se encontraron ofertas"
+### Error: "Error obteniendo token: 401"
+- Verifica las credenciales de Amadeus API
+- Asegúrate de estar usando las claves del ambiente correcto (test/production)
 
-**Causas posibles**:
-1. Ruta no disponible
-2. Fechas muy lejanas o muy cercanas
-3. No hay disponibilidad
+### Error: "ModuleNotFoundError"
+- Verifica que `requirements.txt` tenga todas las dependencias
+- Reconstruye la app en Streamlit Cloud
 
-**Solución**:
-- Intenta con rutas populares (EZE-MIA, EZE-MAD)
-- Usa fechas entre 15 y 60 días adelante
+### La app se queda "cargando"
+- Revisa los logs en Streamlit Cloud
+- Verifica que no haya errores de sintaxis en el código
 
-### La aplicación en Streamlit Cloud se reinicia constantemente
+## 📊 Estructura de Datos Consistente
 
-**Solución**: 
-1. Verifica los logs en Streamlit Cloud
-2. Asegúrate de que todos los secrets estén configurados
-3. Revisa que `requirements.txt` tenga todas las dependencias
+Los archivos están diseñados para ser consistentes entre sí:
 
-### GitHub Actions falla
+### `amadeus_client.py` retorna:
+```python
+{
+    'id': str,
+    'price': float,
+    'currency': str,
+    'airline': str,
+    'airline_code': str,
+    'duration': str,
+    'stops': int,
+    'departure_time': str,
+    'arrival_time': str,
+    'raw_data': dict
+}
+```
 
-**Solución**:
-1. Verifica que todos los secrets estén configurados en GitHub
-2. Revisa los logs en la pestaña Actions
-3. Asegúrate de que los nombres de los secrets coincidan exactamente
+### `database.py` espera:
+```python
+insert_flight_offer(
+    origin: str,           # Código IATA
+    destination: str,      # Código IATA
+    departure_date: str,   # YYYY-MM-DD
+    return_date: str,      # YYYY-MM-DD
+    price: float,
+    currency: str,
+    airline: str,
+    flight_data: dict,     # JSON con datos completos
+    adults: int
+)
+```
 
----
+### `app.py` usa:
+- Los datos de `amadeus_client.py` para mostrar resultados
+- Los métodos de `database.py` para guardar y consultar
+- Ambos son compatibles sin conversiones adicionales
 
-## 📊 Monitoreo de Uso
+## 🎯 Funcionalidades Implementadas
 
-### Límites de Amadeus (Test Environment)
+✅ **Búsqueda de Vuelos**
+- Consulta en tiempo real a Amadeus API
+- Almacenamiento automático en PostgreSQL
+- Soporte para vuelos de ida y vuelta
 
-- **Requests por mes**: 10,000
-- **Requests por segundo**: 10
+✅ **Dashboard Interactivo**
+- Métricas principales
+- Gráficos de evolución temporal
+- Distribución por aerolínea
 
-### Límites de PostgreSQL (Render Free Tier)
+✅ **Análisis de Tarifas**
+- Filtros por ruta y período
+- Estadísticas detalladas
+- Exportación a CSV
 
-- **Storage**: 1 GB
-- **Conexiones**: 97 máximo
+✅ **Historial**
+- Visualización completa de búsquedas
+- Filtros múltiples
+- Exportación de datos
 
-### Límites de Streamlit Cloud (Free Tier)
+## 📝 Notas Adicionales
 
-- **Resources**: 1 GB RAM
-- **Uptime**: Puede entrar en sleep después de inactividad
+- La API de Amadeus en modo Test tiene límites de rate limiting
+- Los datos se almacenan en PostgreSQL de forma permanente
+- El monitoreo automático requiere GitHub Actions o similar
+- Streamlit Cloud tiene algunas limitaciones para procesos en background
 
----
-
-## 🎯 Próximos Pasos
-
-Una vez desplegado:
-
-1. ✅ Personaliza las rutas en `monitor_script.py`
-2. ✅ Ajusta la frecuencia en `.github/workflows/monitor.yml`
-3. ✅ Configura alertas de precios (feature futura)
-4. ✅ Exporta reportes periódicos
-5. ✅ Comparte el dashboard con otros usuarios
-
----
-
-## 📞 Soporte
+## 🆘 Soporte
 
 Si encuentras problemas:
-
-1. Revisa esta guía de troubleshooting
-2. Consulta los logs de la aplicación
-3. Abre un issue en GitHub
+1. Revisa los logs en Streamlit Cloud
+2. Verifica la documentación de Amadeus: https://developers.amadeus.com
+3. Consulta la documentación de Streamlit: https://docs.streamlit.io
 
 ---
 
-**¡Listo! Tu sistema de monitoreo de vuelos está operativo** ✈️📊
+**Desarrollado para:** Programación Avanzada en Ciencia de Datos  
+**Universidad:** Ciudad de Buenos Aires  
+**Powered by:** Amadeus API & PostgreSQL on Render
