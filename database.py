@@ -26,7 +26,6 @@ class Database:
         try:
             cursor = self.conn.cursor()
             
-            # Tabla de búsquedas de vuelos
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS flight_searches (
                     id SERIAL PRIMARY KEY,
@@ -44,7 +43,6 @@ class Database:
                 )
             """)
             
-            # Crear índices para mejorar rendimiento
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_origin_dest 
                 ON flight_searches(origin, destination)
@@ -74,8 +72,6 @@ class Database:
         """Inserta una oferta de vuelo en la base de datos"""
         try:
             cursor = self.conn.cursor()
-            
-            # Convertir flight_data a JSON si es necesario
             flight_data_json = json.dumps(flight_data) if flight_data else None
             
             cursor.execute("""
