@@ -138,6 +138,24 @@ class Database:
         """Alias de get_flights_by_route para compatibilidad"""
         return self.get_flights_by_route(origin, destination, from_date, to_date, limit)
     
+    def get_price_history(self, origin, destination, days=30):
+        """Obtiene el historial de precios para una ruta específica"""
+        try:
+            query = """
+                SELECT search_timestamp, price, currency, airline
+                FROM flight_searches
+                WHERE origin = %s AND destination = %s
+                  AND search_timestamp >= NOW() - INTERVAL '%s days'
+                ORDER BY search_timestamp ASC
+            """
+            
+            df = pd.read_sql_query(query, self.conn, params=(origin, destination, days))
+            return df
+            
+        except Exception as e:
+            st.error(f"❌ Error obteniendo historial de precios: {e}")
+            return pd.DataFrame()
+    
     def get_recent_searches(self, limit=10):
         """Obtiene las búsquedas más recientes"""
         try:
