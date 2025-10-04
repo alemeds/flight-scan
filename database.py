@@ -1,325 +1,242 @@
 import psycopg2
-from psycopg2.extras import RealDictCursor, Json
+from psycopg2.extras import RealDictCursor
 import pandas as pd
+import streamlit as st
 from datetime import datetime
-from typing import List, Dict, Optional
+import json
 
 class Database:
-    """
-    Clase para gestionar la conexión y operaciones con PostgreSQL
-    """
-    
-    def __init__(self, host: str, port: int, database: str, user: str, password: str):
-        """
-        Inicializa la conexión a la base de datos
-        """
-        self.connection_params = {
-            'host': host,
-            'port': port,
-            'database': database,
-            'user': user,
-            'password': password
-        }
-        self.conn = None
-        self.connect()
-        self.create_tables()
-    
-    def connect(self):
-        """
-        Establece conexión con la base de datos
-        """
+    def __init__(self):
+        """Inicializa la conexión a la base de datos usando Streamlit secrets"""
         try:
-            self.conn = psycopg2.connect(**self.connection_params)
-            print("✅ Conexión exitosa a PostgreSQL")
+            self.conn = psycopg2.connect(
+                host=st.secrets["DB_HOST"],
+                port=st.secrets["DB_PORT"],
+                database=st.secrets["DB_NAME"],
+                user=st.secrets["DB_USER"],
+                password=st.secrets["DB_PASSWORD"]
+            )
+            st.success("✅ Conexión exitosa a PostgreSQL")
         except Exception as e:
-            print(f"❌ Error conectando a PostgreSQL: {e}")
+            st.error(f"❌ Error conectando a la base de datos: {e}")
             raise
     
     def create_tables(self):
-        """
-        Crea las tablas necesarias si no existen
-        """
-        create_table_query = """
-        CREATE TABLE IF NOT EXISTS flight_searches (
-            id SERIAL PRIMARY KEY,
-            search_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            origin VARCHAR(3) NOT NULL,
-            destination VARCHAR(3) NOT NULL,
-            departure_date DATE NOT NULL,
-            return_date DATE,
-            adults INTEGER DEFAULT 1,
-            price DECIMAL(10, 2) NOT NULL,
-            currency VARCHAR(3) DEFAULT 'USD',
-            airline VARCHAR(50),
-            flight_data JSONB,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        
-        CREATE INDEX IF NOT EXISTS idx_origin_dest 
-        ON flight_searches(origin, destination);
-        
-        CREATE INDEX IF NOT EXISTS idx_search_timestamp 
-        ON flight_searches(search_timestamp);
-        
-        CREATE INDEX IF NOT EXISTS idx_departure_date 
-        ON flight_searches(departure_date);
-        """
-        
+        """Crea las tablas necesarias si no existen"""
         try:
-            with self.conn.cursor() as cur:
-                cur.execute(create_table_query)
-                self.conn.commit()
-                print("✅ Tablas creadas/verificadas correctamente")
-        except Exception as e:
-            print(f"❌ Error creando tablas: {e}")
-            self.conn.rollback()
-            raise
-    
-    def insert_flight_offer(
-        self,
-        origin: str,
-        destination: str,
-        departure_date: str,
-        return_date: Optional[str],
-        price: float,
-        currency: str = 'USD',
-        airline: str = None,
-        flight_data: Dict = None,
-        adults: int = 1
-    ) -> int:
-        """
-        Inserta una nueva oferta de vuelo en la base de datos
-        """
-        insert_query = """
-        INSERT INTO flight_searches 
-        (origin, destination, departure_date, return_date, adults, price, currency, airline, flight_data)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        RETURNING id;
-        """
-        
-        try:
-            with self.conn.cursor() as cur:
-                cur.execute(
-                    insert_query,
-                    (origin, destination, departure_date, return_date, adults, 
-                     price, currency, airline, Json(flight_data) if flight_data else None)
+            cursor = self.conn.cursor()
+            
+            # Tabla de búsquedas de vuelos
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS flight_searches (
+                    id SERIAL PRIMARY KEY,
+                    search_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    origin VARCHAR(3) NOT NULL,
+                    destination VARCHAR(3) NOT NULL,
+                    departure_date DATE NOT NULL,
+                    return_date DATE,
+                    adults INTEGER DEFAULT 1,
+                    price DECIMAL(10, 2) NOT NULL,
+                    currency VARCHAR(3) DEFAULT 'USD',
+                    airline VARCHAR(50),
+                    flight_data JSONB,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-                flight_id = cur.fetchone()[0]
-                self.conn.commit()
-                return flight_id
+            """)
+            
+            # Crear índices para mejorar rendimiento
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_origin_dest 
+                ON flight_searches(origin, destination)
+            """)
+            
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_search_timestamp 
+                ON flight_searches(search_timestamp)
+            """)
+            
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_departure_date 
+                ON flight_searches(departure_date)
+            """)
+            
+            self.conn.commit()
+            cursor.close()
+            st.success("✅ Tablas creadas/verificadas correctamente")
+            
         except Exception as e:
-            print(f"❌ Error insertando vuelo: {e}")
+            st.error(f"❌ Error creando tablas: {e}")
+            raise
+    
+    def insert_flight_offer(self, origin, destination, departure_date, 
+                           return_date, adults, price, currency, 
+                           airline=None, flight_data=None):
+        """Inserta una oferta de vuelo en la base de datos"""
+        try:
+            cursor = self.conn.cursor()
+            
+            # Convertir flight_data a JSON si es necesario
+            flight_data_json = json.dumps(flight_data) if flight_data else None
+            
+            cursor.execute("""
+                INSERT INTO flight_searches 
+                (origin, destination, departure_date, return_date, 
+                 adults, price, currency, airline, flight_data)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (origin, destination, departure_date, return_date, 
+                  adults, price, currency, airline, flight_data_json))
+            
+            self.conn.commit()
+            cursor.close()
+            
+        except Exception as e:
+            st.error(f"❌ Error insertando oferta: {e}")
             self.conn.rollback()
             raise
     
-    def get_price_history(
-        self,
-        origin: str,
-        destination: str,
-        date_from: Optional[str] = None,
-        date_to: Optional[str] = None
-    ) -> pd.DataFrame:
-        """
-        Obtiene el historial de precios para una ruta específica
-        """
-        query = """
-        SELECT 
-            search_timestamp,
-            origin,
-            destination,
-            departure_date,
-            return_date,
-            price,
-            currency,
-            airline,
-            adults
-        FROM flight_searches
-        WHERE origin = %s AND destination = %s
-        """
-        
-        params = [origin, destination]
-        
-        if date_from:
-            query += " AND search_timestamp >= %s"
-            params.append(date_from)
-        
-        if date_to:
-            query += " AND search_timestamp <= %s"
-            params.append(date_to)
-        
-        query += " ORDER BY search_timestamp ASC"
-        
+    def get_flights_by_route(self, origin=None, destination=None, 
+                            from_date=None, to_date=None, limit=100):
+        """Obtiene vuelos filtrados por ruta y fechas"""
         try:
+            query = """
+                SELECT id, search_timestamp, origin, destination, 
+                       departure_date, return_date, adults, price, 
+                       currency, airline
+                FROM flight_searches
+                WHERE 1=1
+            """
+            params = []
+            
+            if origin:
+                query += " AND origin = %s"
+                params.append(origin)
+            
+            if destination:
+                query += " AND destination = %s"
+                params.append(destination)
+            
+            if from_date:
+                query += " AND search_timestamp >= %s"
+                params.append(from_date)
+            
+            if to_date:
+                query += " AND search_timestamp <= %s"
+                params.append(to_date)
+            
+            query += " ORDER BY search_timestamp DESC LIMIT %s"
+            params.append(limit)
+            
             df = pd.read_sql_query(query, self.conn, params=params)
             return df
+            
         except Exception as e:
-            print(f"❌ Error obteniendo historial: {e}")
+            st.error(f"❌ Error consultando vuelos: {e}")
             return pd.DataFrame()
     
-    def get_all_searches(self, limit: int = 100) -> pd.DataFrame:
-        """
-        Obtiene todas las búsquedas recientes
-        """
-        query = """
-        SELECT 
-            id,
-            search_timestamp,
-            origin,
-            destination,
-            departure_date,
-            return_date,
-            price,
-            currency,
-            airline,
-            adults
-        FROM flight_searches
-        ORDER BY search_timestamp DESC
-        LIMIT %s
-        """
-        
+    def get_available_flights(self, origin=None, destination=None, 
+                             from_date=None, to_date=None, limit=100):
+        """Alias de get_flights_by_route para compatibilidad"""
+        return self.get_flights_by_route(origin, destination, from_date, to_date, limit)
+    
+    def get_recent_searches(self, limit=10):
+        """Obtiene las búsquedas más recientes"""
         try:
+            query = """
+                SELECT origin, destination, departure_date, return_date,
+                       price, currency, airline, search_timestamp
+                FROM flight_searches
+                ORDER BY search_timestamp DESC
+                LIMIT %s
+            """
+            
             df = pd.read_sql_query(query, self.conn, params=(limit,))
             return df
+            
         except Exception as e:
-            print(f"❌ Error obteniendo búsquedas: {e}")
+            st.error(f"❌ Error obteniendo búsquedas recientes: {e}")
             return pd.DataFrame()
     
-    def get_flight_tracking(
-        self,
-        origin: str,
-        destination: str,
-        departure_date: str,
-        return_date: Optional[str] = None
-    ) -> pd.DataFrame:
-        """
-        Obtiene el historial de tracking de un vuelo específico
-        """
-        query = """
-        SELECT 
-            search_timestamp,
-            price,
-            currency,
-            airline,
-            adults
-        FROM flight_searches
-        WHERE origin = %s 
-        AND destination = %s
-        AND departure_date = %s
-        """
-        
-        params = [origin, destination, departure_date]
-        
-        if return_date:
-            query += " AND return_date = %s"
-            params.append(return_date)
-        else:
-            query += " AND return_date IS NULL"
-        
-        query += " ORDER BY search_timestamp ASC"
-        
+    def get_price_statistics(self, origin, destination):
+        """Obtiene estadísticas de precios para una ruta específica"""
         try:
-            df = pd.read_sql_query(query, self.conn, params=params)
+            query = """
+                SELECT 
+                    MIN(price) as min_price,
+                    MAX(price) as max_price,
+                    AVG(price) as avg_price,
+                    COUNT(*) as total_searches,
+                    currency
+                FROM flight_searches
+                WHERE origin = %s AND destination = %s
+                GROUP BY currency
+            """
+            
+            df = pd.read_sql_query(query, self.conn, params=(origin, destination))
             return df
+            
         except Exception as e:
-            print(f"❌ Error obteniendo tracking: {e}")
+            st.error(f"❌ Error obteniendo estadísticas: {e}")
             return pd.DataFrame()
     
-    def get_available_flights(
-        self,
-        origin: str,
-        destination: str,
-        from_date: str
-    ) -> pd.DataFrame:
-        """
-        Obtiene lista de vuelos únicos disponibles para tracking
-        """
-        query = """
-        SELECT 
-            origin,
-            destination,
-            departure_date,
-            return_date,
-            adults,
-            MIN(price) as min_price,
-            MAX(price) as max_price,
-            AVG(price) as avg_price,
-            COUNT(*) as num_searches,
-            MAX(search_timestamp) as last_update
-        FROM flight_searches
-        WHERE origin = %s 
-        AND destination = %s
-        AND departure_date >= %s
-        GROUP BY origin, destination, departure_date, return_date, adults
-        ORDER BY departure_date ASC
-        """
-        
+    def get_airlines_by_route(self, origin, destination):
+        """Obtiene todas las aerolíneas que operan una ruta específica"""
         try:
-            df = pd.read_sql_query(query, self.conn, params=(origin, destination, from_date))
+            query = """
+                SELECT DISTINCT airline, COUNT(*) as frequency
+                FROM flight_searches
+                WHERE origin = %s AND destination = %s 
+                  AND airline IS NOT NULL
+                GROUP BY airline
+                ORDER BY frequency DESC
+            """
+            
+            df = pd.read_sql_query(query, self.conn, params=(origin, destination))
             return df
+            
         except Exception as e:
-            print(f"❌ Error obteniendo vuelos disponibles: {e}")
+            st.error(f"❌ Error obteniendo aerolíneas: {e}")
             return pd.DataFrame()
     
-    def get_statistics(
-        self,
-        origin: str,
-        destination: str,
-        days_back: int = 30
-    ) -> Dict:
-        """
-        Obtiene estadísticas de precios para una ruta
-        """
-        query = """
-        SELECT 
-            MIN(price) as min_price,
-            AVG(price) as avg_price,
-            MAX(price) as max_price,
-            COUNT(*) as total_searches,
-            COUNT(DISTINCT airline) as total_airlines
-        FROM flight_searches
-        WHERE origin = %s 
-        AND destination = %s
-        AND search_timestamp >= CURRENT_TIMESTAMP - INTERVAL '%s days'
-        """
-        
+    def delete_old_searches(self, days=90):
+        """Elimina búsquedas más antiguas que X días"""
         try:
-            with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(query, (origin, destination, days_back))
-                result = cur.fetchone()
-                return dict(result) if result else {}
-        except
-    
-    def delete_old_searches(self, days_to_keep: int = 90):
-        """
-        Elimina búsquedas antiguas para mantener la base limpia
-        """
-        delete_query = """
-        DELETE FROM flight_searches
-        WHERE search_timestamp < CURRENT_TIMESTAMP - INTERVAL '%s days'
-        """
-        
-        try:
-            with self.conn.cursor() as cur:
-                cur.execute(delete_query, (days_to_keep,))
-                deleted_count = cur.rowcount
-                self.conn.commit()
-                print(f"✅ Se eliminaron {deleted_count} registros antiguos")
-                return deleted_count
+            cursor = self.conn.cursor()
+            
+            cursor.execute("""
+                DELETE FROM flight_searches
+                WHERE search_timestamp < NOW() - INTERVAL '%s days'
+            """, (days,))
+            
+            deleted_count = cursor.rowcount
+            self.conn.commit()
+            cursor.close()
+            
+            return deleted_count
+            
         except Exception as e:
-            print(f"❌ Error eliminando registros antiguos: {e}")
+            st.error(f"❌ Error eliminando búsquedas antiguas: {e}")
             self.conn.rollback()
             return 0
     
-    def close(self):
-        """
-        Cierra la conexión a la base de datos
-        """
-        if self.conn:
-            self.conn.close()
-            print("✅ Conexión cerrada")
+    def export_to_csv(self, origin=None, destination=None):
+        """Exporta datos a CSV"""
+        try:
+            df = self.get_flights_by_route(origin, destination, limit=10000)
+            
+            if not df.empty:
+                csv = df.to_csv(index=False)
+                return csv
+            else:
+                return None
+                
+        except Exception as e:
+            st.error(f"❌ Error exportando a CSV: {e}")
+            return None
     
-    def __del__(self):
-        """
-        Destructor para asegurar que la conexión se cierre
-        """
-        self.close()
+    def close(self):
+        """Cierra la conexión a la base de datos"""
+        try:
+            if self.conn:
+                self.conn.close()
+        except Exception as e:
+            st.error(f"❌ Error cerrando conexión: {e}")
