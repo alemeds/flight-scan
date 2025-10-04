@@ -184,6 +184,82 @@ class Database:
             print(f"❌ Error obteniendo búsquedas: {e}")
             return pd.DataFrame()
     
+    def get_flight_tracking(
+        self,
+        origin: str,
+        destination: str,
+        departure_date: str,
+        return_date: Optional[str] = None
+    ) -> pd.DataFrame:
+        """
+        Obtiene el historial de tracking de un vuelo específico
+        """
+        query = """
+        SELECT 
+            search_timestamp,
+            price,
+            currency,
+            airline,
+            adults
+        FROM flight_searches
+        WHERE origin = %s 
+        AND destination = %s
+        AND departure_date = %s
+        """
+        
+        params = [origin, destination, departure_date]
+        
+        if return_date:
+            query += " AND return_date = %s"
+            params.append(return_date)
+        else:
+            query += " AND return_date IS NULL"
+        
+        query += " ORDER BY search_timestamp ASC"
+        
+        try:
+            df = pd.read_sql_query(query, self.conn, params=params)
+            return df
+        except Exception as e:
+            print(f"❌ Error obteniendo tracking: {e}")
+            return pd.DataFrame()
+    
+    def get_available_flights(
+        self,
+        origin: str,
+        destination: str,
+        from_date: str
+    ) -> pd.DataFrame:
+        """
+        Obtiene lista de vuelos únicos disponibles para tracking
+        """
+        query = """
+        SELECT 
+            origin,
+            destination,
+            departure_date,
+            return_date,
+            adults,
+            MIN(price) as min_price,
+            MAX(price) as max_price,
+            AVG(price) as avg_price,
+            COUNT(*) as num_searches,
+            MAX(search_timestamp) as last_update
+        FROM flight_searches
+        WHERE origin = %s 
+        AND destination = %s
+        AND departure_date >= %s
+        GROUP BY origin, destination, departure_date, return_date, adults
+        ORDER BY departure_date ASC
+        """
+        
+        try:
+            df = pd.read_sql_query(query, self.conn, params=(origin, destination, from_date))
+            return df
+        except Exception as e:
+            print(f"❌ Error obteniendo vuelos disponibles: {e}")
+            return pd.DataFrame()
+    
     def get_statistics(
         self,
         origin: str,
@@ -211,9 +287,7 @@ class Database:
                 cur.execute(query, (origin, destination, days_back))
                 result = cur.fetchone()
                 return dict(result) if result else {}
-        except Exception as e:
-            print(f"❌ Error obteniendo estadísticas: {e}")
-            return {}
+        except
     
     def delete_old_searches(self, days_to_keep: int = 90):
         """
