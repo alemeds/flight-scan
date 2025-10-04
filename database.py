@@ -6,15 +6,15 @@ from datetime import datetime
 import json
 
 class Database:
-    def __init__(self):
-        """Inicializa la conexión a la base de datos usando Streamlit secrets"""
+    def __init__(self, host, port, database, user, password):
+        """Inicializa la conexión a la base de datos"""
         try:
             self.conn = psycopg2.connect(
-                host=st.secrets["DB_HOST"],
-                port=st.secrets["DB_PORT"],
-                database=st.secrets["DB_NAME"],
-                user=st.secrets["DB_USER"],
-                password=st.secrets["DB_PASSWORD"]
+                host=host,
+                port=port,
+                database=database,
+                user=user,
+                password=password
             )
             st.success("✅ Conexión exitosa a PostgreSQL")
         except Exception as e:
