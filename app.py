@@ -303,8 +303,12 @@ with tab1:
     
     if db:
         try:
-            # Obtener datos recientes
-            recent_data = db.get_recent_searches(limit=100)
+            # Obtener datos recientes - con manejo de errores
+            try:
+                recent_data = db.get_recent_searches(limit=100)
+            except AttributeError:
+                st.error("⚠️ El método 'get_recent_searches' no está disponible en database.py")
+                recent_data = None
             
             if recent_data and len(recent_data) > 0:
                 df = pd.DataFrame(recent_data)
@@ -377,7 +381,12 @@ with tab2:
             col1, col2 = st.columns(2)
             
             with col1:
-                routes = db.get_unique_routes()
+                try:
+                    routes = db.get_unique_routes()
+                except AttributeError:
+                    st.error("⚠️ El método 'get_unique_routes' no está disponible en database.py")
+                    routes = None
+                    
                 if routes and len(routes) > 0:
                     selected_route = st.selectbox(
                         "Seleccionar Ruta",
@@ -398,11 +407,15 @@ with tab2:
             
             if selected_route:
                 # Obtener datos de la ruta seleccionada
-                route_data = db.get_searches_by_route(
-                    origin=selected_route[0],
-                    destination=selected_route[1],
-                    days=days_back
-                )
+                try:
+                    route_data = db.get_searches_by_route(
+                        origin=selected_route[0],
+                        destination=selected_route[1],
+                        days=days_back
+                    )
+                except AttributeError:
+                    st.error("⚠️ El método 'get_searches_by_route' no está disponible en database.py")
+                    route_data = None
                 
                 if route_data and len(route_data) > 0:
                     df_route = pd.DataFrame(route_data)
@@ -461,7 +474,11 @@ with tab3:
     if db:
         try:
             # Obtener todo el historial
-            all_data = db.get_recent_searches(limit=500)
+            try:
+                all_data = db.get_recent_searches(limit=500)
+            except AttributeError:
+                st.error("⚠️ El método 'get_recent_searches' no está disponible en database.py")
+                all_data = None
             
             if all_data and len(all_data) > 0:
                 df_all = pd.DataFrame(all_data)
