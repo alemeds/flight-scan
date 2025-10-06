@@ -44,10 +44,10 @@ def init_amadeus():
         )
         return amadeus
     except Exception as e:
-        st.error(f"Error inicializando cliente Amadeus: {str(e)}")
+        st.warning(f"API de Amadeus no disponible: {str(e)}")
         return None
 
-# Función de simulación de vuelos
+# Función de simulación de vuelos mejorada
 def simulate_flight_search(origin, destination, departure_date, return_date, adults):
     """Simula búsqueda de vuelos cuando no hay API disponible"""
     try:
@@ -70,21 +70,50 @@ def simulate_flight_search(origin, destination, departure_date, return_date, adu
             base_price *= 0.7
         
         # Generar múltiples ofertas
-        airlines = ['Avianca', 'LATAM', 'Aerolineas Argentinas', 'American Airlines', 'Delta', 'United']
+        airlines = [
+            'American Airlines', 'Delta Air Lines', 'United Airlines',
+            'LATAM Airlines', 'Aerolíneas Argentinas', 'Avianca',
+            'Copa Airlines', 'Iberia', 'Air France', 'KLM'
+        ]
+        
+        airline_codes = ['AA', 'DL', 'UA', 'LA', 'AR', 'AV', 'CM', 'IB', 'AF', 'KL']
+        
         offers = []
         
-        for i in range(random.randint(3, 8)):
+        for i in range(random.randint(5, 12)):
             price = base_price * random.uniform(0.85, 1.35)
-            airline = random.choice(airlines)
-            stops = random.choice([0, 1, 2])
-            duration = f"{random.randint(4, 16)}h {random.randint(0, 59)}m"
+            airline_idx = random.randint(0, len(airlines) - 1)
+            airline = airlines[airline_idx]
+            airline_code = airline_codes[airline_idx]
+            stops = random.choice([0, 0, 1, 1, 2])  # Más probabilidad de 0-1 escalas
+            
+            hours = random.randint(4, 18)
+            minutes = random.randint(0, 59)
+            duration = f"{hours}h {minutes}m"
+            
+            # Generar horarios realistas
+            dep_hour = random.randint(0, 23)
+            dep_minute = random.randint(0, 59)
+            
+            if isinstance(dep_date, str):
+                dep_datetime = datetime.strptime(dep_date, '%Y-%m-%d')
+            else:
+                dep_datetime = dep_date
+                
+            departure_time = dep_datetime.replace(hour=dep_hour, minute=dep_minute).isoformat()
+            arrival_time = (dep_datetime + timedelta(hours=hours, minutes=minutes)).isoformat()
             
             offers.append({
+                'id': f'SIM{i+1}_{origin}{destination}',
                 'price': round(price, 2),
                 'currency': 'USD',
                 'airline': airline,
+                'airline_code': airline_code,
                 'stops': stops,
-                'duration': duration
+                'duration': duration,
+                'departure_time': departure_time,
+                'arrival_time': arrival_time,
+                'number_of_bookable_seats': random.randint(1, 9)
             })
         
         return sorted(offers, key=lambda x: x['price'])
@@ -96,9 +125,9 @@ def simulate_flight_search(origin, destination, departure_date, return_date, adu
 db = init_database()
 amadeus = init_amadeus()
 
-# Inicializar estado de sesión para modo simulación
+# Inicializar estado de sesión
 if 'simulation_mode' not in st.session_state:
-    st.session_state.simulation_mode = False
+    st.session_state.simulation_mode = (amadeus is None)  # Auto-activar si no hay API
 
 if 'active_searches' not in st.session_state:
     st.session_state.active_searches = []
@@ -113,7 +142,8 @@ st.sidebar.header("🔍 Búsqueda de Vuelos")
 # Modo de operación
 col_mode1, col_mode2 = st.sidebar.columns(2)
 with col_mode1:
-    if st.button("🌐 Modo Real" if st.session_state.simulation_mode else "✅ Modo Real"):
+    if st.button("🌐 Modo Real" if st.session_state.simulation_mode else "✅ Modo Real", 
+                 disabled=(amadeus is None)):
         st.session_state.simulation_mode = False
         st.rerun()
 
@@ -123,9 +153,12 @@ with col_mode2:
         st.rerun()
 
 if st.session_state.simulation_mode:
-    st.sidebar.info("🎮 **Modo Simulación Activo** - Datos de prueba")
+    st.sidebar.info("🎮 **Modo Simulación Activo** - Datos de prueba realistas")
 else:
     st.sidebar.success("🌐 **Modo Real** - API de Amadeus")
+
+if amadeus is None:
+    st.sidebar.warning("⚠️ API no configurada - Solo modo simulación disponible")
 
 st.sidebar.markdown("---")
 
@@ -197,13 +230,24 @@ if submit_search:
                             adults
                         )
                     else:
-                        offers = amadeus.search_flights(
-                            origin=origin,
-                            destination=destination,
-                            departure_date=departure_date.strftime('%Y-%m-%d'),
-                            return_date=return_date.strftime('%Y-%m-%d'),
-                            adults=adults
-                        )
+                        try:
+                            offers = amadeus.search_flights(
+                                origin=origin,
+                                destination=destination,
+                                departure_date=departure_date.strftime('%Y-%m-%d'),
+                                return_date=return_date.strftime('%Y-%m-%d'),
+                                adults=adults
+                            )
+                        except Exception as api_error:
+                            st.error(f"Error con API de Amadeus: {str(api_error)}")
+                            st.info("Cambiando a modo simulación...")
+                            st.session_state.simulation_mode = True
+                            offers = simulate_flight_search(
+                                origin, destination,
+                                departure_date.strftime('%Y-%m-%d'),
+                                return_date.strftime('%Y-%m-%d'),
+                                adults
+                            )
                 
                 if offers:
                     st.success(f"✅ Se encontraron {len(offers)} ofertas de vuelos")
@@ -248,29 +292,53 @@ if submit_search:
                             'current_price': lowest_price,
                             'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                         }
-                        st.session_state.active_searches.append(search_item)
-                        st.success(f"📌 Búsqueda agregada a monitoreo activo")
+                        
+                        # Evitar duplicados
+                        exists = any(
+                            s['origin'] == origin and 
+                            s['destination'] == destination and 
+                            s['departure_date'] == departure_date.strftime('%Y-%m-%d')
+                            for s in st.session_state.active_searches
+                        )
+                        
+                        if not exists:
+                            st.session_state.active_searches.append(search_item)
+                            st.success(f"📌 Búsqueda agregada a monitoreo activo")
+                        else:
+                            st.info("ℹ️ Esta búsqueda ya está en monitoreo activo")
                     
-                    # Mostrar resultados
+                    # Mostrar resultados en tabla mejorada
                     df_offers = pd.DataFrame(offers)
                     
-                    # Destacar ofertas que cumplen el objetivo
+                    # Preparar columnas para mostrar
+                    display_columns = ['airline', 'price', 'currency', 'duration', 'stops']
+                    
+                    # Agregar columna de cumplimiento de objetivo
                     if target_price > 0:
                         df_offers['Cumple Objetivo'] = df_offers['price'] <= target_price
+                        display_columns.append('Cumple Objetivo')
                     
                     st.dataframe(
-                        df_offers,
+                        df_offers[display_columns],
                         use_container_width=True,
                         column_config={
                             'price': st.column_config.NumberColumn('Precio', format="$%.2f"),
+                            'stops': st.column_config.NumberColumn('Escalas'),
                             'Cumple Objetivo': st.column_config.CheckboxColumn('🎯 Objetivo')
-                        } if target_price > 0 else None
+                        }
                     )
+                    
+                    # Mostrar detalles adicionales en expander
+                    with st.expander("📋 Ver detalles completos"):
+                        st.dataframe(df_offers, use_container_width=True)
+                    
                 else:
                     st.warning("⚠️ No se encontraron vuelos para los criterios especificados")
                     
             except Exception as e:
                 st.error(f"❌ Error buscando vuelos: {str(e)}")
+                import traceback
+                st.code(traceback.format_exc())
     else:
         st.warning("⚠️ Por favor ingresa origen y destino")
 
@@ -281,14 +349,19 @@ if st.session_state.active_searches:
     
     for idx, search in enumerate(st.session_state.active_searches):
         with st.sidebar.expander(f"{search['origin']} → {search['destination']}"):
+            st.write(f"**Salida:** {search['departure_date']}")
             st.write(f"**Objetivo:** ${search['target_price']:.2f}")
-            st.write(f"**Actual:** ${search['current_price']:.2f}")
+            st.write(f"**Último precio:** ${search['current_price']:.2f}")
             
             if search['current_price'] <= search['target_price']:
                 st.success("✅ Objetivo alcanzado")
             else:
                 diff = search['current_price'] - search['target_price']
                 st.info(f"📊 Faltan ${diff:.2f}")
+                
+                # Barra de progreso
+                progress = min(1.0, search['target_price'] / search['current_price'])
+                st.progress(progress)
             
             if st.button(f"🗑️ Eliminar", key=f"del_{idx}"):
                 st.session_state.active_searches.pop(idx)
@@ -303,12 +376,7 @@ with tab1:
     
     if db:
         try:
-            # Obtener datos recientes - con manejo de errores
-            try:
-                recent_data = db.get_recent_searches(limit=100)
-            except AttributeError:
-                st.error("⚠️ El método 'get_recent_searches' no está disponible en database.py")
-                recent_data = None
+            recent_data = db.get_recent_searches(limit=100)
             
             if recent_data and len(recent_data) > 0:
                 df = pd.DataFrame(recent_data)
@@ -377,16 +445,10 @@ with tab2:
     
     if db:
         try:
-            # Filtros
             col1, col2 = st.columns(2)
             
             with col1:
-                try:
-                    routes = db.get_unique_routes()
-                except AttributeError:
-                    st.error("⚠️ El método 'get_unique_routes' no está disponible en database.py")
-                    routes = None
-                    
+                routes = db.get_unique_routes()
                 if routes and len(routes) > 0:
                     selected_route = st.selectbox(
                         "Seleccionar Ruta",
@@ -406,16 +468,11 @@ with tab2:
                 )
             
             if selected_route:
-                # Obtener datos de la ruta seleccionada
-                try:
-                    route_data = db.get_searches_by_route(
-                        origin=selected_route[0],
-                        destination=selected_route[1],
-                        days=days_back
-                    )
-                except AttributeError:
-                    st.error("⚠️ El método 'get_searches_by_route' no está disponible en database.py")
-                    route_data = None
+                route_data = db.get_searches_by_route(
+                    origin=selected_route[0],
+                    destination=selected_route[1],
+                    days=days_back
+                )
                 
                 if route_data and len(route_data) > 0:
                     df_route = pd.DataFrame(route_data)
@@ -473,12 +530,7 @@ with tab3:
     
     if db:
         try:
-            # Obtener todo el historial
-            try:
-                all_data = db.get_recent_searches(limit=500)
-            except AttributeError:
-                st.error("⚠️ El método 'get_recent_searches' no está disponible en database.py")
-                all_data = None
+            all_data = db.get_recent_searches(limit=500)
             
             if all_data and len(all_data) > 0:
                 df_all = pd.DataFrame(all_data)
