@@ -76,15 +76,16 @@ Crea el archivo `.streamlit/secrets.toml` con el siguiente contenido:
 
 ```toml
 # Database Configuration (Render PostgreSQL)
-DB_HOST = "dpg-d3g6g1p5pdvs73e8c0rg-a.oregon-postgres.render.com"
+DB_HOST = "your-database-host.com"
 DB_PORT = 5432
-DB_NAME = "vuelos_9lrw"
-DB_USER = "vuelos"
-DB_PASSWORD = "FOa7NtnssHMgheHCMilCRXYmLYQn7pko"
+DB_NAME = "your-database-name"
+DB_USER = "your-database-user"
+DB_PASSWORD = "your-database-password"
 
 # Amadeus API Configuration
-AMADEUS_API_KEY = "KAomv16lpjbjJFAmj42OgXtzEOzCHHlx"
-AMADEUS_API_SECRET = "mwHaoM1gEV9bweN2"
+AMADEUS_API_KEY = "your-amadeus-api-key"
+AMADEUS_API_SECRET = "your-amadeus-api-secret"
+
 ```
 
 ⚠️ **Importante**: No subas este archivo al repositorio. Ya está incluido en `.gitignore`.
