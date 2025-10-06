@@ -52,6 +52,7 @@ class Database:
         CREATE INDEX IF NOT EXISTS idx_origin_dest ON flight_searches(origin, destination);
         CREATE INDEX IF NOT EXISTS idx_search_timestamp ON flight_searches(search_timestamp);
         CREATE INDEX IF NOT EXISTS idx_departure_date ON flight_searches(departure_date);
+        CREATE INDEX IF NOT EXISTS idx_price ON flight_searches(price);
         """
         
         try:
@@ -104,6 +105,10 @@ class Database:
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
+            
+            # Asegurar que airline no sea None
+            if airline is None or airline == '':
+                airline = 'N/A'
             
             cursor.execute(
                 insert_query,
@@ -159,8 +164,7 @@ class Database:
             cursor.close()
             conn.close()
             
-            # Convertir a lista de diccionarios
-            return [dict(row) for row in results]
+            return [dict(row) for row in results] if results else []
             
         except Exception as e:
             print(f"Error obteniendo búsquedas recientes: {str(e)}")
@@ -188,7 +192,7 @@ class Database:
             cursor.close()
             conn.close()
             
-            return routes
+            return routes if routes else []
             
         except Exception as e:
             print(f"Error obteniendo rutas: {str(e)}")
@@ -242,7 +246,7 @@ class Database:
             cursor.close()
             conn.close()
             
-            return [dict(row) for row in results]
+            return [dict(row) for row in results] if results else []
             
         except Exception as e:
             print(f"Error obteniendo búsquedas por ruta: {str(e)}")
@@ -321,6 +325,7 @@ class Database:
           AND destination = %s
           AND search_timestamp >= %s
           AND airline IS NOT NULL
+          AND airline != 'N/A'
         GROUP BY airline
         ORDER BY min_price ASC;
         """
@@ -336,7 +341,7 @@ class Database:
             cursor.close()
             conn.close()
             
-            return [dict(row) for row in results]
+            return [dict(row) for row in results] if results else []
             
         except Exception as e:
             print(f"Error obteniendo precios por aerolínea: {str(e)}")
@@ -429,9 +434,10 @@ class Database:
             conn = self._get_connection()
             cursor = conn.cursor()
             cursor.execute("SELECT 1;")
+            result = cursor.fetchone()
             cursor.close()
             conn.close()
-            return True
+            return result is not None
         except Exception as e:
             print(f"Error de conexión: {str(e)}")
             return False
