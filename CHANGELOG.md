@@ -1,7 +1,7 @@
 
-## Changelog
+# Changelog
 
-# 📝 Registro de Cambios - Flight Trading Monitor
+## 📝 Registro de Cambios - Flight Trading Monitor
 
 Todos los cambios notables en este proyecto serán documentados en este archivo.
 
