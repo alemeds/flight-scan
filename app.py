@@ -85,7 +85,7 @@ def simulate_flight_search(origin, destination, departure_date, return_date, adu
             airline_idx = random.randint(0, len(airlines) - 1)
             airline = airlines[airline_idx]
             airline_code = airline_codes[airline_idx]
-            stops = random.choice([0, 0, 1, 1, 2])  # Más probabilidad de 0-1 escalas
+            stops = random.choice([0, 0, 1, 1, 2])
             
             hours = random.randint(4, 18)
             minutes = random.randint(0, 59)
@@ -127,7 +127,7 @@ amadeus = init_amadeus()
 
 # Inicializar estado de sesión
 if 'simulation_mode' not in st.session_state:
-    st.session_state.simulation_mode = (amadeus is None)  # Auto-activar si no hay API
+    st.session_state.simulation_mode = (amadeus is None)
 
 if 'active_searches' not in st.session_state:
     st.session_state.active_searches = []
@@ -337,8 +337,6 @@ if submit_search:
                     
             except Exception as e:
                 st.error(f"❌ Error buscando vuelos: {str(e)}")
-                import traceback
-                st.code(traceback.format_exc())
     else:
         st.warning("⚠️ Por favor ingresa origen y destino")
 
@@ -497,10 +495,10 @@ with tab2:
                         x='search_timestamp',
                         y='price',
                         color='airline' if 'airline' in df_route.columns else None,
-                        size='price',
                         title=f'Precios {selected_route[0]} → {selected_route[1]}',
                         labels={'search_timestamp': 'Fecha', 'price': 'Precio (USD)'}
                     )
+                    fig.update_traces(marker=dict(size=10))
                     st.plotly_chart(fig, use_container_width=True)
                     
                     # Tabla de datos
