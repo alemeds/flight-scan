@@ -10,13 +10,17 @@ Flight Scan es una aplicación que permite:
 - 💾 Almacenar histórico de búsquedas en PostgreSQL
 - 📊 Visualizar evolución de precios con gráficos interactivos
 - 📈 Analizar tendencias y comparar precios por aerolínea
-- ⏰ Configurar monitoreo automático con diferentes frecuencias
+- 💰 **Definir precios objetivo y recibir alertas**
+- 🎮 **Modo simulación para pruebas sin consumir cuota de API**
+- 📋 **Gestión de búsquedas activas con seguimiento de objetivos**
 
-## 🎯 Trabajo Práctico
-
-Este proyecto fue desarrollado como parte del **Trabajo Práctico del Segundo Módulo** de la materia:
+Este proyecto fue desarrollado como parte del Trabajo Práctico del Segundo Módulo de la materia:
 - **Programación Avanzada en Ciencia de Datos**
-- Universidad de la Ciudad de Buenos Aires
+- **Universidad de la Ciudad de Buenos Aires**
+
+## 🚀 Demo en Vivo
+
+**[Ver aplicación desplegada](https://flight-scan.streamlit.app)**
 
 ## 🛠️ Tecnologías Utilizadas
 
@@ -33,17 +37,17 @@ Este proyecto fue desarrollado como parte del **Trabajo Práctico del Segundo M�
 ```
 flight-scan/
 │
-├── app.py                 # Aplicación principal de Streamlit
-├── database.py            # Módulo de gestión de base de datos
-├── amadeus_client.py      # Cliente para API de Amadeus
-├── requirements.txt       # Dependencias del proyecto
+├── app.py                  # Aplicación principal de Streamlit
+├── database.py             # Módulo de gestión de base de datos
+├── amadeus_client.py       # Cliente para API de Amadeus
+├── requirements.txt        # Dependencias del proyecto
 ├── .streamlit/
-│   └── secrets.toml      # Configuración de credenciales (no incluido en repo)
-├── setup_database.py     # Script para inicializar la BD
-└── README.md             # Este archivo
+│   └── secrets.toml        # Configuración de credenciales (no incluido en repo)
+├── setup_database.py       # Script para inicializar la BD
+└── README.md               # Este archivo
 ```
 
-## 🚀 Instalación y Configuración
+## ⚙️ Instalación Local
 
 ### 1. Clonar el repositorio
 
@@ -75,7 +79,7 @@ pip install -r requirements.txt
 Crea el archivo `.streamlit/secrets.toml` con el siguiente contenido:
 
 ```toml
-# Database Configuration (Render PostgreSQL)
+# Database Configuration (PostgreSQL)
 DB_HOST = "your-database-host.com"
 DB_PORT = 5432
 DB_NAME = "your-database-name"
@@ -85,12 +89,26 @@ DB_PASSWORD = "your-database-password"
 # Amadeus API Configuration
 AMADEUS_API_KEY = "your-amadeus-api-key"
 AMADEUS_API_SECRET = "your-amadeus-api-secret"
-
 ```
 
-⚠️ **Importante**: No subas este archivo al repositorio. Ya está incluido en `.gitignore`.
+> ⚠️ **IMPORTANTE**: Nunca compartas estas credenciales públicamente. El archivo `secrets.toml` ya está incluido en `.gitignore`.
 
-### 5. Inicializar la base de datos
+### 5. Obtener credenciales
+
+#### PostgreSQL (Render)
+
+1. Regístrate en [Render.com](https://render.com)
+2. Crea una nueva PostgreSQL Database
+3. Copia las credenciales proporcionadas
+
+#### Amadeus API
+
+1. Regístrate en [Amadeus for Developers](https://developers.amadeus.com)
+2. Crea una nueva aplicación en el portal
+3. Obtén tu API Key y API Secret
+4. Comienza con el entorno de prueba (Test Environment)
+
+### 6. Inicializar la base de datos
 
 ```bash
 python setup_database.py
@@ -98,7 +116,7 @@ python setup_database.py
 
 Este script creará las tablas necesarias en PostgreSQL.
 
-### 6. Ejecutar la aplicación
+### 7. Ejecutar la aplicación
 
 ```bash
 streamlit run app.py
@@ -106,45 +124,61 @@ streamlit run app.py
 
 La aplicación se abrirá automáticamente en tu navegador en `http://localhost:8501`
 
-## 📊 Uso de la Aplicación
+## 📖 Uso de la Aplicación
 
-### Búsqueda Manual
+### Búsqueda Manual de Vuelos
 
-1. En la barra lateral, ingresa:
+1. En la barra lateral, selecciona el modo:
+   - **🌐 Modo Real**: Usa la API de Amadeus (requiere credenciales)
+   - **🎮 Modo Demo**: Usa datos simulados realistas (sin API)
+
+2. Ingresa los parámetros de búsqueda:
    - **Origen**: Código IATA del aeropuerto (ej: EZE para Buenos Aires)
    - **Destino**: Código IATA del aeropuerto (ej: MIA para Miami)
    - **Fechas**: Ida y vuelta
-   - **Adultos**: Número de pasajeros
+   - **Adultos**: Número de pasajeros (1-9)
+   - **💰 Precio Objetivo**: Define un precio meta (opcional)
 
-2. Haz clic en **"🔍 Buscar Vuelos Ahora"**
+3. Haz clic en **"🔍 Buscar Vuelos Ahora"**
 
-3. Los resultados se guardarán automáticamente en la base de datos
+4. Los resultados se guardarán automáticamente en la base de datos
 
-### Monitoreo Automático
+### Sistema de Precios Objetivo
 
-1. Selecciona la **frecuencia de consulta**:
-   - Cada 5 minutos
-   - Cada 30 minutos
-   - Cada 2 horas
-   - Cada 24 horas
+Cuando defines un precio objetivo:
+- ✅ Recibirás una **alerta visual con confeti** si se encuentra un vuelo que cumple tu objetivo
+- 📌 La búsqueda se agregará automáticamente a **"📋 Búsquedas Activas"**
+- 📊 Verás una **barra de progreso** hacia tu objetivo en el sidebar
+- 🎯 Los vuelos que cumplen el objetivo se marcarán en la tabla de resultados
 
-2. Define la **duración del monitoreo** (en días)
+### Modo Simulación
 
-3. Haz clic en **"▶️ Iniciar Monitoreo Automático"**
-
-⚠️ **Nota**: Para monitoreo 24/7 continuo, se recomienda usar un scheduler externo (ver sección de Automatización)
+El **Modo Demo** es perfecto para:
+- Probar la aplicación sin configurar APIs
+- Hacer demos o presentaciones
+- No consumir cuota de la API de Amadeus
+- Datos realistas basados en patrones de precios reales
 
 ### Análisis de Tarifas
 
 En la pestaña **"📈 Análisis de Tarifas"** puedes:
 
-- Ver gráficos de evolución de precios
-- Comparar precios entre aerolíneas
+- Ver gráficos de evolución de precios por ruta
 - Consultar estadísticas (mínimo, promedio, máximo)
-- Filtrar por ruta y período de tiempo
+- Filtrar por ruta y período de tiempo (1-90 días)
+- Comparar precios entre diferentes búsquedas
 - Exportar datos a CSV
 
-## 🔄 Automatización con GitHub Actions
+### Historial
+
+En la pestaña **"📋 Historial"** puedes:
+
+- Ver todas las búsquedas realizadas
+- Filtrar por origen, destino y aerolínea
+- Exportar el historial completo a CSV
+- Analizar patrones de precios históricos
+
+## 🤖 Monitoreo Automático con GitHub Actions
 
 Para ejecutar el monitoreo automático de forma continua, puedes usar GitHub Actions.
 
@@ -188,12 +222,10 @@ jobs:
         python monitor_script.py
 ```
 
-No olvides agregar los secrets en GitHub:
+**No olvides agregar los secrets en GitHub:**
 - Settings → Secrets and variables → Actions → New repository secret
 
-## 📦 Base de Datos
-
-### Esquema de la tabla `flight_searches`
+## 🗄️ Estructura de la Base de Datos
 
 ```sql
 CREATE TABLE flight_searches (
@@ -206,45 +238,45 @@ CREATE TABLE flight_searches (
     adults INTEGER DEFAULT 1,
     price DECIMAL(10, 2) NOT NULL,
     currency VARCHAR(3) DEFAULT 'USD',
-    airline VARCHAR(50),
+    airline VARCHAR(100),
     flight_data JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
-### Índices
-
+**Índices para optimizar consultas:**
 - `idx_origin_dest`: Búsquedas por ruta
 - `idx_search_timestamp`: Búsquedas por fecha
 - `idx_departure_date`: Búsquedas por fecha de salida
+- `idx_price`: Optimización de consultas por precio
 
-## 🌐 Dataset Utilizado
+## 📊 Fuente de Datos
 
 - **Fuente**: [Amadeus Flight Offers API](https://developers.amadeus.com/self-service/category/flights)
 - **Tipo**: API REST
 - **Datos**: Ofertas de vuelos en tiempo real
 - **Actualización**: Consultas bajo demanda
+- **Límites gratuitos**: 2,000 consultas/mes (Test Environment)
 
-## 📈 Ejemplos de Visualización
+## 📈 Dashboard
 
 El dashboard incluye:
 
-1. **Gráfico de líneas**: Evolución temporal de precios
-2. **Box plot**: Distribución de precios por aerolínea
-3. **Métricas**: Min, Max, Promedio, Total de consultas
-4. **Tabla interactiva**: Historial completo de búsquedas
+- **Gráfico de líneas**: Evolución temporal de precios
+- **Box plot**: Distribución de precios por aerolínea
+- **Scatter plot**: Precios por fecha con código de colores por aerolínea
+- **Métricas**: Min, Max, Promedio, Total de consultas
+- **Tabla interactiva**: Historial completo de búsquedas con filtros
 
-## 🔧 Scripts Adicionales
+## 💡 Ejemplos de Uso
 
-### setup_database.py
-
-Inicializa las tablas en PostgreSQL:
+### Inicializar Base de Datos
 
 ```python
 from database import Database
 import os
 
-# Configuración desde variables de entorno o archivo
+# Configuración desde variables de entorno
 db = Database(
     host=os.getenv('DB_HOST'),
     port=int(os.getenv('DB_PORT', 5432)),
@@ -256,9 +288,7 @@ db = Database(
 print("✅ Base de datos configurada correctamente")
 ```
 
-### monitor_script.py
-
-Script para monitoreo automático (para usar con cron o GitHub Actions):
+### Script de Monitoreo Automático
 
 ```python
 from database import Database
@@ -317,7 +347,7 @@ for route in routes:
 print("✅ Monitoreo completado")
 ```
 
-## 🐛 Troubleshooting
+## 🔧 Solución de Problemas
 
 ### Error de conexión a PostgreSQL
 
@@ -327,15 +357,15 @@ OperationalError: could not connect to server
 
 **Solución**: Verifica que las credenciales en `secrets.toml` sean correctas y que la base de datos en Render esté activa.
 
-### Error de autenticación Amadeus
+### Error de autenticación de Amadeus
 
 ```
 Error obteniendo token: 401
 ```
 
-**Solución**: Verifica que `AMADEUS_API_KEY` y `AMADEUS_API_SECRET` sean correctos.
+**Solución**: Verifica que `AMADEUS_API_KEY` y `AMADEUS_API_SECRET` sean correctos. Asegúrate de usar las credenciales del entorno correcto (Test vs Production).
 
-### La aplicación no encuentra módulos
+### Módulo no encontrado
 
 ```
 ModuleNotFoundError: No module named 'streamlit'
@@ -343,36 +373,76 @@ ModuleNotFoundError: No module named 'streamlit'
 
 **Solución**: Asegúrate de haber activado el entorno virtual y ejecutado `pip install -r requirements.txt`
 
-## 📝 Criterios de Evaluación Cumplidos
+### Límite de API excedido
 
-✅ **Claridad y organización del repositorio**: Estructura clara con separación de responsabilidades
+```
+Error 429: Too Many Requests
+```
 
-✅ **Correcta carga de datos**: Sistema robusto de inserción con manejo de errores
+**Solución**: Has alcanzado el límite de llamadas gratuitas de Amadeus (2,000/mes). Opciones:
+- Espera hasta el próximo período de facturación
+- Usa el **Modo Demo** para continuar probando
+- Considera actualizar tu plan de Amadeus
 
-✅ **Funcionalidad del dashboard**: Dashboard interactivo con múltiples visualizaciones
+### Error en gráfico scatter
 
-✅ **Calidad del README**: Documentación completa con instrucciones detalladas
+```
+Invalid value of type 'narwhals.stable.v1.Series'
+```
 
-✅ **Replicabilidad**: Instrucciones paso a paso para clonar y ejecutar
+**Solución**: Este error ya está corregido en la última versión de `app.py`. Actualiza tu código con la versión más reciente del repositorio.
+
+## ✅ Criterios de Evaluación Cumplidos
+
+- ✅ **Claridad y organización del repositorio**: Estructura clara con separación de responsabilidades
+- ✅ **Correcta carga de datos**: Sistema robusto de inserción con manejo de errores
+- ✅ **Funcionalidad del dashboard**: Dashboard interactivo con múltiples visualizaciones
+- ✅ **Calidad del README**: Documentación completa con instrucciones detalladas
+- ✅ **Replicabilidad**: Instrucciones paso a paso para clonar y ejecutar
+- ✅ **Funcionalidades adicionales**: Precios objetivo, modo simulación, búsquedas activas
+
+## 🆕 Nuevas Funcionalidades (v2.0)
+
+### Sistema de Precios Objetivo
+- Define un precio meta para tus búsquedas
+- Recibe alertas visuales cuando se alcanza
+- Seguimiento automático en búsquedas activas
+
+### Modo Simulación
+- Prueba la app sin API configurada
+- Datos realistas basados en patrones reales
+- Perfecto para demos y presentaciones
+
+### Gestión de Búsquedas Activas
+- Monitorea múltiples rutas simultáneamente
+- Visualiza progreso hacia precios objetivo
+- Elimina búsquedas completadas fácilmente
+
+### Mejoras de Estabilidad
+- Fallback automático si la API falla
+- Validaciones robustas de datos
+- Manejo mejorado de errores
+- Timeouts en peticiones HTTP
 
 ## 👨‍💻 Autor
 
-Lic. Antonio Luis E. Martinez
+**Lic. Antonio Luis E. Martinez**
 
 ## 📄 Licencia
 
 Este proyecto es de código abierto y está disponible bajo la licencia MIT.
 
-## 🔗 Enlaces
+## 🔗 Enlaces Útiles
 
 - **Repositorio**: [github.com/alemeds/flight-scan](https://github.com/alemeds/flight-scan)
-- **Proyecto publicado**: [strimlit.app/alemeds/flight-scan](https://flight-scan.streamlit.app)
+- **Aplicación**: [flight-scan.streamlit.app](https://flight-scan.streamlit.app)
 - **Amadeus API**: [developers.amadeus.com](https://developers.amadeus.com)
 - **Render**: [render.com](https://render.com)
+- **Documentación de Streamlit**: [docs.streamlit.io](https://docs.streamlit.io)
 
 ## 📧 Contacto
 
-Para preguntas o sugerencias, por favor abre un issue en el repositorio.
+Para preguntas o sugerencias, por favor abre un **issue** en el repositorio.
 
 ---
 
