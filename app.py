@@ -3,8 +3,9 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
-from database import Database
-from amadeus_client import AmadeusClient
+from sheets_db import SheetsDatabase, DEFAULT_SPREADSHEET_NAME
+from skyscrapper_client import SkyScrapperClient
+from config import get_secret, get_gcp_credentials
 import time
 import os
 import random
@@ -20,14 +21,12 @@ st.set_page_config(
 # Inicializar conexiones
 @st.cache_resource
 def init_database():
-    """Inicializa la conexión a la base de datos"""
+    """Inicializa la conexión a la planilla de Google Sheets"""
     try:
-        db = Database(
-            host=st.secrets["DB_HOST"],
-            port=int(st.secrets.get("DB_PORT", 5432)),
-            database=st.secrets["DB_NAME"],
-            user=st.secrets["DB_USER"],
-            password=st.secrets["DB_PASSWORD"]
+        db = SheetsDatabase(
+            credentials_info=get_gcp_credentials(),
+            spreadsheet_name=get_secret("SHEET_NAME", DEFAULT_SPREADSHEET_NAME),
+            spreadsheet_id=get_secret("SHEET_ID")
         )
         return db
     except Exception as e:
@@ -35,16 +34,16 @@ def init_database():
         return None
 
 @st.cache_resource
-def init_amadeus():
-    """Inicializa el cliente de Amadeus"""
+def init_flight_client():
+    """Inicializa el cliente de la API de vuelos (Sky Scrapper via RapidAPI)"""
     try:
-        amadeus = AmadeusClient(
-            api_key=st.secrets["AMADEUS_API_KEY"],
-            api_secret=st.secrets["AMADEUS_API_SECRET"]
-        )
-        return amadeus
+        api_key = get_secret("RAPIDAPI_KEY")
+        if not api_key:
+            st.warning("RAPIDAPI_KEY no configurada - Solo modo simulación disponible")
+            return None
+        return SkyScrapperClient(api_key=api_key)
     except Exception as e:
-        st.warning(f"API de Amadeus no disponible: {str(e)}")
+        st.warning(f"API de vuelos no disponible: {str(e)}")
         return None
 
 # Función de simulación de vuelos mejorada
@@ -123,18 +122,15 @@ def simulate_flight_search(origin, destination, departure_date, return_date, adu
 
 # Inicializar
 db = init_database()
-amadeus = init_amadeus()
+flight_client = init_flight_client()
 
 # Inicializar estado de sesión
 if 'simulation_mode' not in st.session_state:
-    st.session_state.simulation_mode = (amadeus is None)
-
-if 'active_searches' not in st.session_state:
-    st.session_state.active_searches = []
+    st.session_state.simulation_mode = (flight_client is None)
 
 # Título principal
 st.title("✈️ Flight Scan - Monitor de Precios de Vuelos")
-st.markdown("**Sistema de monitoreo y análisis de tarifas usando Amadeus API**")
+st.markdown("**Sistema de monitoreo y análisis de tarifas usando Sky Scrapper API**")
 
 # Sidebar - Configuración de búsqueda
 st.sidebar.header("🔍 Búsqueda de Vuelos")
@@ -142,8 +138,8 @@ st.sidebar.header("🔍 Búsqueda de Vuelos")
 # Modo de operación
 col_mode1, col_mode2 = st.sidebar.columns(2)
 with col_mode1:
-    if st.button("🌐 Modo Real" if st.session_state.simulation_mode else "✅ Modo Real", 
-                 disabled=(amadeus is None)):
+    if st.button("🌐 Modo Real" if st.session_state.simulation_mode else "✅ Modo Real",
+                 disabled=(flight_client is None)):
         st.session_state.simulation_mode = False
         st.rerun()
 
@@ -155,9 +151,9 @@ with col_mode2:
 if st.session_state.simulation_mode:
     st.sidebar.info("🎮 **Modo Simulación Activo** - Datos de prueba realistas")
 else:
-    st.sidebar.success("🌐 **Modo Real** - API de Amadeus")
+    st.sidebar.success("🌐 **Modo Real** - API Sky Scrapper")
 
-if amadeus is None:
+if flight_client is None:
     st.sidebar.warning("⚠️ API no configurada - Solo modo simulación disponible")
 
 st.sidebar.markdown("---")
@@ -220,7 +216,7 @@ if submit_search:
                         adults
                     )
                 else:
-                    if not amadeus:
+                    if not flight_client:
                         st.warning("⚠️ API no disponible. Activando modo simulación...")
                         st.session_state.simulation_mode = True
                         offers = simulate_flight_search(
@@ -231,7 +227,7 @@ if submit_search:
                         )
                     else:
                         try:
-                            offers = amadeus.search_flights(
+                            offers = flight_client.search_flights(
                                 origin=origin,
                                 destination=destination,
                                 departure_date=departure_date.strftime('%Y-%m-%d'),
@@ -239,7 +235,7 @@ if submit_search:
                                 adults=adults
                             )
                         except Exception as api_error:
-                            st.error(f"Error con API de Amadeus: {str(api_error)}")
+                            st.error(f"Error con API de vuelos: {str(api_error)}")
                             st.info("Cambiando a modo simulación...")
                             st.session_state.simulation_mode = True
                             offers = simulate_flight_search(
@@ -258,54 +254,45 @@ if submit_search:
                         st.balloons()
                         st.success(f"🎯 ¡Precio objetivo alcanzado! Precio más bajo: ${lowest_price:.2f}")
                     
-                    # Guardar ofertas en la base de datos
+                    # Guardar ofertas en la planilla (una sola llamada por lote)
                     if db:
-                        saved_count = 0
-                        for offer in offers:
-                            try:
-                                db.insert_flight_offer(
-                                    origin=origin,
-                                    destination=destination,
-                                    departure_date=departure_date.strftime('%Y-%m-%d'),
-                                    return_date=return_date.strftime('%Y-%m-%d'),
-                                    adults=adults,
-                                    price=offer['price'],
-                                    currency=offer['currency'],
-                                    airline=offer.get('airline', 'N/A'),
-                                    flight_data=offer
-                                )
-                                saved_count += 1
-                            except Exception as e:
-                                st.warning(f"Error guardando oferta: {str(e)}")
-                        
-                        st.info(f"💾 Se guardaron {saved_count} ofertas en la base de datos")
+                        try:
+                            saved_count = db.insert_flight_offers(
+                                origin=origin,
+                                destination=destination,
+                                departure_date=departure_date.strftime('%Y-%m-%d'),
+                                return_date=return_date.strftime('%Y-%m-%d'),
+                                adults=adults,
+                                offers=offers,
+                                is_simulated=st.session_state.simulation_mode
+                            )
+                            st.info(f"💾 Se guardaron {saved_count} ofertas en la base de datos")
+                        except Exception as e:
+                            st.warning(f"Error guardando ofertas: {str(e)}")
                     
-                    # Agregar a búsquedas activas si hay precio objetivo
-                    if target_price > 0:
-                        search_item = {
-                            'origin': origin,
-                            'destination': destination,
-                            'departure_date': departure_date.strftime('%Y-%m-%d'),
-                            'return_date': return_date.strftime('%Y-%m-%d'),
-                            'adults': adults,
-                            'target_price': target_price,
-                            'current_price': lowest_price,
-                            'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                        }
-                        
-                        # Evitar duplicados
+                    # Crear alerta de precio persistente si hay precio objetivo
+                    if target_price > 0 and db:
+                        # Evitar duplicados entre alertas activas
                         exists = any(
-                            s['origin'] == origin and 
-                            s['destination'] == destination and 
-                            s['departure_date'] == departure_date.strftime('%Y-%m-%d')
-                            for s in st.session_state.active_searches
+                            a['origin'] == origin and
+                            a['destination'] == destination and
+                            a['departure_date'] == departure_date
+                            for a in db.get_active_alerts()
                         )
-                        
+
                         if not exists:
-                            st.session_state.active_searches.append(search_item)
-                            st.success(f"📌 Búsqueda agregada a monitoreo activo")
+                            db.create_price_alert(
+                                origin=origin,
+                                destination=destination,
+                                departure_date=departure_date.strftime('%Y-%m-%d'),
+                                return_date=return_date.strftime('%Y-%m-%d'),
+                                adults=adults,
+                                target_price=target_price,
+                                last_price=lowest_price
+                            )
+                            st.success("📌 Alerta de precio guardada para monitoreo automático")
                         else:
-                            st.info("ℹ️ Esta búsqueda ya está en monitoreo activo")
+                            st.info("ℹ️ Ya existe una alerta activa para esta búsqueda")
                     
                     # Mostrar resultados en tabla mejorada
                     df_offers = pd.DataFrame(offers)
@@ -340,30 +327,35 @@ if submit_search:
     else:
         st.warning("⚠️ Por favor ingresa origen y destino")
 
-# Gestión de búsquedas activas
-if st.session_state.active_searches:
-    st.sidebar.markdown("---")
-    st.sidebar.header("📋 Búsquedas Activas")
-    
-    for idx, search in enumerate(st.session_state.active_searches):
-        with st.sidebar.expander(f"{search['origin']} → {search['destination']}"):
-            st.write(f"**Salida:** {search['departure_date']}")
-            st.write(f"**Objetivo:** ${search['target_price']:.2f}")
-            st.write(f"**Último precio:** ${search['current_price']:.2f}")
-            
-            if search['current_price'] <= search['target_price']:
-                st.success("✅ Objetivo alcanzado")
-            else:
-                diff = search['current_price'] - search['target_price']
-                st.info(f"📊 Faltan ${diff:.2f}")
-                
-                # Barra de progreso
-                progress = min(1.0, search['target_price'] / search['current_price'])
-                st.progress(progress)
-            
-            if st.button(f"🗑️ Eliminar", key=f"del_{idx}"):
-                st.session_state.active_searches.pop(idx)
-                st.rerun()
+# Gestión de alertas de precio activas (persistidas en BD)
+if db:
+    active_alerts = db.get_active_alerts()
+
+    if active_alerts:
+        st.sidebar.markdown("---")
+        st.sidebar.header("📋 Alertas de Precio Activas")
+
+        for alert in active_alerts:
+            with st.sidebar.expander(f"{alert['origin']} → {alert['destination']}"):
+                st.write(f"**Salida:** {alert['departure_date']}")
+                st.write(f"**Objetivo:** ${alert['target_price']:.2f}")
+
+                if alert['last_price'] is not None:
+                    st.write(f"**Último precio:** ${alert['last_price']:.2f}")
+
+                    if alert['last_price'] <= alert['target_price']:
+                        st.success("✅ Objetivo alcanzado")
+                    else:
+                        diff = alert['last_price'] - alert['target_price']
+                        st.info(f"📊 Faltan ${diff:.2f}")
+
+                        # Barra de progreso
+                        progress = min(1.0, float(alert['target_price']) / float(alert['last_price']))
+                        st.progress(progress)
+
+                if st.button("🗑️ Eliminar", key=f"del_alert_{alert['id']}"):
+                    db.deactivate_alert(alert['id'])
+                    st.rerun()
 
 # Tabs principales
 tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "📈 Análisis de Tarifas", "📋 Historial"])
@@ -374,7 +366,10 @@ with tab1:
     
     if db:
         try:
-            recent_data = db.get_recent_searches(limit=100)
+            recent_data = db.get_recent_searches(
+                limit=100,
+                simulated=st.session_state.simulation_mode
+            )
             
             if recent_data and len(recent_data) > 0:
                 df = pd.DataFrame(recent_data)
@@ -446,7 +441,7 @@ with tab2:
             col1, col2 = st.columns(2)
             
             with col1:
-                routes = db.get_unique_routes()
+                routes = db.get_unique_routes(simulated=st.session_state.simulation_mode)
                 if routes and len(routes) > 0:
                     selected_route = st.selectbox(
                         "Seleccionar Ruta",
@@ -469,7 +464,8 @@ with tab2:
                 route_data = db.get_searches_by_route(
                     origin=selected_route[0],
                     destination=selected_route[1],
-                    days=days_back
+                    days=days_back,
+                    simulated=st.session_state.simulation_mode
                 )
                 
                 if route_data and len(route_data) > 0:
@@ -528,7 +524,10 @@ with tab3:
     
     if db:
         try:
-            all_data = db.get_recent_searches(limit=500)
+            all_data = db.get_recent_searches(
+                limit=500,
+                simulated=st.session_state.simulation_mode
+            )
             
             if all_data and len(all_data) > 0:
                 df_all = pd.DataFrame(all_data)
@@ -597,7 +596,7 @@ st.markdown(
     """
     <div style='text-align: center'>
         <p>🚀 Flight Scan - Desarrollado para Programación Avanzada en Ciencia de Datos</p>
-        <p>Universidad de la Ciudad de Buenos Aires | Powered by Amadeus API & PostgreSQL</p>
+        <p>Universidad de la Ciudad de Buenos Aires | Powered by Sky Scrapper API & Google Sheets</p>
     </div>
     """,
     unsafe_allow_html=True

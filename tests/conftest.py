@@ -1,21 +1,7 @@
 """Shared fixtures and configuration for Flight Scan tests."""
 
 import pytest
-import os
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
-
-
-@pytest.fixture
-def valid_iata_codes():
-    """Válid IATA codes for testing."""
-    return {
-        'origin': 'EZE',  # Buenos Aires
-        'destination': 'MIA',  # Miami
-        'invalid': 'INVALID',
-        'lowercase': 'eze',
-        'empty': '',
-    }
 
 
 @pytest.fixture
@@ -34,120 +20,56 @@ def valid_dates():
 
 
 @pytest.fixture
-def amadeus_credentials():
-    """Amadeus API credentials for testing."""
+def sample_itinerary():
+    """Sample itinerary from Sky Scrapper searchFlights response."""
     return {
-        'api_key': 'test_key_12345',
-        'api_secret': 'test_secret_67890',
-    }
-
-
-@pytest.fixture
-def db_credentials():
-    """Database connection credentials."""
-    return {
-        'host': 'localhost',
-        'port': 5432,
-        'database': 'flight_scan_test',
-        'user': 'test_user',
-        'password': 'test_password',
-    }
-
-
-@pytest.fixture
-def sample_flight_offer():
-    """Sample flight offer from Amadeus API."""
-    return {
-        'id': 'SIM1_EZEMAI',
-        'price': {
-            'total': '450.50',
-            'currency': 'USD'
-        },
-        'itineraries': [
+        'id': 'itin-123',
+        'price': {'raw': 850.50, 'formatted': '$851'},
+        'legs': [
             {
-                'duration': 'PT10H30M',
-                'segments': [
-                    {
-                        'carrierCode': 'AA',
-                        'departure': {'at': '2026-08-01T10:00:00'},
-                        'arrival': {'at': '2026-08-01T20:30:00'},
-                    }
-                ]
-            }
-        ],
-        'numberOfBookableSeats': 5,
-    }
-
-
-@pytest.fixture
-def mock_amadeus_response():
-    """Mock response from Amadeus API."""
-    return {
-        'data': [
-            {
-                'id': 'SIM1_EZEMAI',
-                'price': {
-                    'total': '450.50',
-                    'currency': 'USD'
-                },
-                'itineraries': [
-                    {
-                        'duration': 'PT10H30M',
-                        'segments': [
-                            {
-                                'carrierCode': 'AA',
-                                'departure': {'at': '2026-08-01T10:00:00'},
-                                'arrival': {'at': '2026-08-01T20:30:00'},
-                            }
-                        ]
-                    }
-                ],
-                'numberOfBookableSeats': 5,
-            },
-            {
-                'id': 'SIM2_EZEMAI',
-                'price': {
-                    'total': '520.75',
-                    'currency': 'USD'
-                },
-                'itineraries': [
-                    {
-                        'duration': 'PT12H00M',
-                        'segments': [
-                            {
-                                'carrierCode': 'LA',
-                                'departure': {'at': '2026-08-01T14:00:00'},
-                                'arrival': {'at': '2026-08-02T02:00:00'},
-                            }
-                        ]
-                    }
-                ],
-                'numberOfBookableSeats': 3,
+                'durationInMinutes': 595,
+                'stopCount': 1,
+                'departure': '2026-09-01T09:00:00',
+                'arrival': '2026-09-01T18:55:00',
+                'carriers': {
+                    'marketing': [
+                        {'id': -32171, 'name': 'LATAM Airlines', 'alternateId': 'LA'}
+                    ]
+                }
             }
         ]
     }
 
 
 @pytest.fixture
-def mock_amadeus_empty_response():
-    """Mock empty response from Amadeus API."""
-    return {'data': []}
-
-
-@pytest.fixture
-def mock_amadeus_no_results():
-    """Mock response with no flight offers."""
+def sample_airport_response():
+    """Sample response from Sky Scrapper searchAirport endpoint (real shape)."""
     return {
-        'data': []
+        'status': True,
+        'data': [
+            {
+                'presentation': {'title': 'Buenos Aires', 'suggestionTitle': 'Buenos Aires (Any)'},
+                'navigation': {
+                    'entityId': '27536465',
+                    'entityType': 'CITY',
+                    'relevantFlightParams': {
+                        'skyId': 'BUEA',
+                        'entityId': '27536465',
+                        'flightPlaceType': 'CITY'
+                    }
+                }
+            },
+            {
+                'presentation': {'title': 'Buenos Aires Ministro Pistarini'},
+                'navigation': {
+                    'entityId': '95673318',
+                    'entityType': 'AIRPORT',
+                    'relevantFlightParams': {
+                        'skyId': 'EZE',
+                        'entityId': '95673318',
+                        'flightPlaceType': 'AIRPORT'
+                    }
+                }
+            }
+        ]
     }
-
-
-@pytest.fixture(autouse=True)
-def reset_imports():
-    """Reset imports before each test to avoid side effects."""
-    yield
-    # Cleanup after test
-    if 'amadeus_client' in __import__('sys').modules:
-        del __import__('sys').modules['amadeus_client']
-    if 'database' in __import__('sys').modules:
-        del __import__('sys').modules['database']

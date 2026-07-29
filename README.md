@@ -1,13 +1,13 @@
 # ✈️ Flight Scan - Monitor de Tarifas Aéreas
 
-Sistema de monitoreo y análisis de tarifas de vuelos usando la API de Amadeus y PostgreSQL.
+Sistema de monitoreo y análisis de tarifas de vuelos usando la API Sky Scrapper (RapidAPI) y Google Sheets como base de datos.
 
 ## 📋 Descripción
 
 Flight Scan es una aplicación que permite:
 
-- 🔍 Consultar ofertas de vuelos en tiempo real mediante la API de Amadeus
-- 💾 Almacenar histórico de búsquedas en PostgreSQL
+- 🔍 Consultar ofertas de vuelos en tiempo real mediante la API Sky Scrapper
+- 💾 Almacenar histórico de búsquedas en una planilla de Google Sheets
 - 📊 Visualizar evolución de precios con gráficos interactivos
 - 📈 Analizar tendencias y comparar precios por aerolínea
 - 💰 **Definir precios objetivo y recibir alertas**
@@ -26,11 +26,10 @@ Este proyecto fue desarrollado como parte del Trabajo Práctico del Segundo Mód
 
 - **Python 3.9+**
 - **Streamlit**: Dashboard interactivo
-- **PostgreSQL**: Base de datos relacional (alojada en Render)
-- **Amadeus API**: Consulta de ofertas de vuelos
+- **Google Sheets**: Base de datos (via gspread + service account)
+- **Sky Scrapper API (RapidAPI)**: Consulta de ofertas de vuelos
 - **Plotly**: Visualizaciones interactivas
 - **Pandas**: Manipulación de datos
-- **psycopg2**: Conexión a PostgreSQL
 
 ## 📁 Estructura del Proyecto
 
@@ -38,12 +37,14 @@ Este proyecto fue desarrollado como parte del Trabajo Práctico del Segundo Mód
 flight-scan/
 │
 ├── app.py                  # Aplicación principal de Streamlit
-├── database.py             # Módulo de gestión de base de datos
-├── amadeus_client.py       # Cliente para API de Amadeus
+├── sheets_db.py            # Persistencia en Google Sheets
+├── skyscrapper_client.py   # Cliente para API Sky Scrapper (RapidAPI)
+├── config.py               # Helper de secrets (st.secrets / entorno)
+├── monitor_script.py       # Monitoreo automático de alertas (cron/Actions)
 ├── requirements.txt        # Dependencias del proyecto
 ├── .streamlit/
 │   └── secrets.toml        # Configuración de credenciales (no incluido en repo)
-├── setup_database.py       # Script para inicializar la BD
+├── tests/                  # Tests unitarios
 └── README.md               # Este archivo
 ```
 
@@ -79,42 +80,46 @@ pip install -r requirements.txt
 Crea el archivo `.streamlit/secrets.toml` con el siguiente contenido:
 
 ```toml
-# Database Configuration (PostgreSQL)
-DB_HOST = "your-database-host.com"
-DB_PORT = 5432
-DB_NAME = "your-database-name"
-DB_USER = "your-database-user"
-DB_PASSWORD = "your-database-password"
+# Sky Scrapper (RapidAPI)
+RAPIDAPI_KEY = "your-rapidapi-key"
 
-# Amadeus API Configuration
-AMADEUS_API_KEY = "your-amadeus-api-key"
-AMADEUS_API_SECRET = "your-amadeus-api-secret"
+# Google Sheets
+SHEET_NAME = "flight-scan-db"
+
+[gcp_service_account]
+type = "service_account"
+project_id = "..."
+private_key_id = "..."
+private_key = "..."
+client_email = "..."
+client_id = "..."
+token_uri = "https://oauth2.googleapis.com/token"
 ```
 
-> ⚠️ **IMPORTANTE**: Nunca compartas estas credenciales públicamente. El archivo `secrets.toml` ya está incluido en `.gitignore`.
+> ⚠️ **IMPORTANTE**: Nunca compartas estas credenciales públicamente. El archivo `secrets.toml` ya está incluido en `.gitignore`. Ver `secrets.toml.example` para la plantilla completa.
 
 ### 5. Obtener credenciales
 
-#### PostgreSQL (Render)
+#### Sky Scrapper (RapidAPI)
 
-1. Regístrate en [Render.com](https://render.com)
-2. Crea una nueva PostgreSQL Database
-3. Copia las credenciales proporcionadas
+1. Regístrate en [RapidAPI](https://rapidapi.com)
+2. Suscribite a [Sky Scrapper](https://rapidapi.com/apiheya/api/sky-scrapper) (tiene plan gratuito)
+3. Copia tu API key desde el dashboard de RapidAPI
 
-#### Amadeus API
+#### Google Service Account (para Sheets)
 
-1. Regístrate en [Amadeus for Developers](https://developers.amadeus.com)
-2. Crea una nueva aplicación en el portal
-3. Obtén tu API Key y API Secret
-4. Comienza con el entorno de prueba (Test Environment)
+1. En [Google Cloud Console](https://console.cloud.google.com), crea un proyecto (o usa uno existente)
+2. Habilita las APIs **Google Sheets API** y **Google Drive API**
+3. IAM → Service Accounts → crear una service account → Keys → agregar clave JSON
+4. Guarda el JSON localmente (NO lo subas al repo) y copia sus campos a `secrets.toml`
 
-### 6. Inicializar la base de datos
+### 6. Crear la planilla de base de datos
 
-```bash
-python setup_database.py
-```
+1. Crea en Google Sheets una planilla llamada **`flight-scan-db`**
+2. Compártela con el `client_email` de la service account con rol **Editor** (una sola vez)
+3. Las hojas y encabezados se crean solos al arrancar la app
 
-Este script creará las tablas necesarias en PostgreSQL.
+> 🔒 **Privacidad**: la app desplegada en streamlit.app es pública en su URL, pero los datos de la planilla NO son accesibles públicamente — el acceso está mediado por la service account. Solo quien tenga acceso al Sheet en Drive puede verlo directamente.
 
 ### 7. Ejecutar la aplicación
 
@@ -129,7 +134,7 @@ La aplicación se abrirá automáticamente en tu navegador en `http://localhost:
 ### Búsqueda Manual de Vuelos
 
 1. En la barra lateral, selecciona el modo:
-   - **🌐 Modo Real**: Usa la API de Amadeus (requiere credenciales)
+   - **🌐 Modo Real**: Usa la API Sky Scrapper (requiere RAPIDAPI_KEY)
    - **🎮 Modo Demo**: Usa datos simulados realistas (sin API)
 
 2. Ingresa los parámetros de búsqueda:
@@ -156,8 +161,10 @@ Cuando defines un precio objetivo:
 El **Modo Demo** es perfecto para:
 - Probar la aplicación sin configurar APIs
 - Hacer demos o presentaciones
-- No consumir cuota de la API de Amadeus
+- No consumir cuota de la API de vuelos
 - Datos realistas basados en patrones de precios reales
+
+Los datos simulados se guardan marcados como tales y no se mezclan con los reales en los análisis.
 
 ### Análisis de Tarifas
 
@@ -209,15 +216,18 @@ jobs:
       run: |
         pip install -r requirements.txt
     
+    - name: Write service account file
+      run: echo '${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}' > sa.json
+
     - name: Run monitoring script
       env:
-        DB_HOST: ${{ secrets.DB_HOST }}
-        DB_PORT: ${{ secrets.DB_PORT }}
-        DB_NAME: ${{ secrets.DB_NAME }}
-        DB_USER: ${{ secrets.DB_USER }}
-        DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-        AMADEUS_API_KEY: ${{ secrets.AMADEUS_API_KEY }}
-        AMADEUS_API_SECRET: ${{ secrets.AMADEUS_API_SECRET }}
+        GCP_SERVICE_ACCOUNT_FILE: sa.json
+        SHEET_NAME: flight-scan-db
+        RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+        SMTP_HOST: ${{ secrets.SMTP_HOST }}
+        SMTP_USER: ${{ secrets.SMTP_USER }}
+        SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
       run: |
         python monitor_script.py
 ```
@@ -225,38 +235,40 @@ jobs:
 **No olvides agregar los secrets en GitHub:**
 - Settings → Secrets and variables → Actions → New repository secret
 
-## 🗄️ Estructura de la Base de Datos
+## 🗄️ Estructura de la Base de Datos (planilla `flight-scan-db`)
 
-```sql
-CREATE TABLE flight_searches (
-    id SERIAL PRIMARY KEY,
-    search_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    origin VARCHAR(3) NOT NULL,
-    destination VARCHAR(3) NOT NULL,
-    departure_date DATE NOT NULL,
-    return_date DATE,
-    adults INTEGER DEFAULT 1,
-    price DECIMAL(10, 2) NOT NULL,
-    currency VARCHAR(3) DEFAULT 'USD',
-    airline VARCHAR(100),
-    flight_data JSONB,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
+**Hoja `busquedas`** — una fila por oferta encontrada:
 
-**Índices para optimizar consultas:**
-- `idx_origin_dest`: Búsquedas por ruta
-- `idx_search_timestamp`: Búsquedas por fecha
-- `idx_departure_date`: Búsquedas por fecha de salida
-- `idx_price`: Optimización de consultas por precio
+| Columna | Descripción |
+|---------|-------------|
+| `timestamp` | Fecha y hora de la búsqueda |
+| `origen` / `destino` | Códigos IATA |
+| `fecha_salida` / `fecha_regreso` | Fechas del viaje |
+| `adultos` | Cantidad de pasajeros |
+| `precio` / `moneda` | Precio de la oferta |
+| `aerolinea` | Aerolínea de la oferta |
+| `simulado` | TRUE si proviene del Modo Demo |
+
+**Hoja `alertas_precio`** — una fila por alerta:
+
+| Columna | Descripción |
+|---------|-------------|
+| `id` | Identificador de la alerta |
+| `origen` / `destino` / `fecha_salida` / `fecha_regreso` / `adultos` | Parámetros de la búsqueda |
+| `precio_objetivo` | Precio que dispara la notificación |
+| `ultimo_precio` | Último precio visto por el monitor |
+| `activa` | TRUE mientras la alerta esté vigente |
+| `ultima_revision` / `disparada_en` / `creada_en` | Timestamps de seguimiento |
+
+Las hojas y encabezados se crean automáticamente al iniciar la app.
 
 ## 📊 Fuente de Datos
 
-- **Fuente**: [Amadeus Flight Offers API](https://developers.amadeus.com/self-service/category/flights)
-- **Tipo**: API REST
+- **Fuente**: [Sky Scrapper API](https://rapidapi.com/apiheya/api/sky-scrapper) (RapidAPI)
+- **Tipo**: API REST (datos de Google Flights)
 - **Datos**: Ofertas de vuelos en tiempo real
 - **Actualización**: Consultas bajo demanda
-- **Límites gratuitos**: 2,000 consultas/mes (Test Environment)
+- **Límites**: según el plan contratado en RapidAPI (existe plan gratuito)
 
 ## 📈 Dashboard
 
@@ -270,100 +282,53 @@ El dashboard incluye:
 
 ## 💡 Ejemplos de Uso
 
-### Inicializar Base de Datos
+### Buscar y guardar desde código
 
 ```python
-from database import Database
+from sheets_db import SheetsDatabase
+from skyscrapper_client import SkyScrapperClient
+from config import get_gcp_credentials
 import os
 
-# Configuración desde variables de entorno
-db = Database(
-    host=os.getenv('DB_HOST'),
-    port=int(os.getenv('DB_PORT', 5432)),
-    database=os.getenv('DB_NAME'),
-    user=os.getenv('DB_USER'),
-    password=os.getenv('DB_PASSWORD')
+db = SheetsDatabase(credentials_info=get_gcp_credentials())
+client = SkyScrapperClient(api_key=os.getenv('RAPIDAPI_KEY'))
+
+offers = client.search_flights(
+    origin='EZE',
+    destination='MIA',
+    departure_date='2026-09-01',
+    return_date='2026-09-10',
+    adults=1
 )
 
-print("✅ Base de datos configurada correctamente")
+saved = db.insert_flight_offers(
+    origin='EZE', destination='MIA',
+    departure_date='2026-09-01', return_date='2026-09-10',
+    adults=1, offers=offers
+)
+
+print(f"✅ {saved} ofertas guardadas")
 ```
 
-### Script de Monitoreo Automático
-
-```python
-from database import Database
-from amadeus_client import AmadeusClient
-import os
-from datetime import datetime, timedelta
-
-# Inicializar
-db = Database(
-    host=os.getenv('DB_HOST'),
-    port=int(os.getenv('DB_PORT', 5432)),
-    database=os.getenv('DB_NAME'),
-    user=os.getenv('DB_USER'),
-    password=os.getenv('DB_PASSWORD')
-)
-
-amadeus = AmadeusClient(
-    api_key=os.getenv('AMADEUS_API_KEY'),
-    api_secret=os.getenv('AMADEUS_API_SECRET')
-)
-
-# Configuración de rutas a monitorear
-routes = [
-    {'origin': 'EZE', 'destination': 'MIA', 'days_ahead': 30},
-    {'origin': 'EZE', 'destination': 'MAD', 'days_ahead': 45},
-    {'origin': 'AEP', 'destination': 'SCL', 'days_ahead': 20}
-]
-
-# Buscar y guardar
-for route in routes:
-    departure = (datetime.now() + timedelta(days=route['days_ahead'])).strftime('%Y-%m-%d')
-    return_date = (datetime.now() + timedelta(days=route['days_ahead'] + 7)).strftime('%Y-%m-%d')
-    
-    offers = amadeus.search_flights(
-        origin=route['origin'],
-        destination=route['destination'],
-        departure_date=departure,
-        return_date=return_date,
-        adults=1
-    )
-    
-    for offer in offers:
-        db.insert_flight_offer(
-            origin=route['origin'],
-            destination=route['destination'],
-            departure_date=departure,
-            return_date=return_date,
-            price=offer['price'],
-            currency=offer['currency'],
-            airline=offer.get('airline'),
-            flight_data=offer
-        )
-    
-    print(f"✅ {route['origin']} → {route['destination']}: {len(offers)} ofertas guardadas")
-
-print("✅ Monitoreo completado")
-```
+El monitoreo automático de alertas ya está implementado en `monitor_script.py` (ver sección de GitHub Actions).
 
 ## 🔧 Solución de Problemas
 
-### Error de conexión a PostgreSQL
+### Error de conexión a Google Sheets
 
 ```
-OperationalError: could not connect to server
+DatabaseError: No se encontró la planilla 'flight-scan-db'
 ```
 
-**Solución**: Verifica que las credenciales en `secrets.toml` sean correctas y que la base de datos en Render esté activa.
+**Solución**: Verifica que la planilla exista en Google Sheets y esté compartida (rol Editor) con el `client_email` de la service account.
 
-### Error de autenticación de Amadeus
+### Error de autenticación de Sky Scrapper
 
 ```
-Error obteniendo token: 401
+AuthenticationError: RapidAPI key inválida o suscripción inactiva
 ```
 
-**Solución**: Verifica que `AMADEUS_API_KEY` y `AMADEUS_API_SECRET` sean correctos. Asegúrate de usar las credenciales del entorno correcto (Test vs Production).
+**Solución**: Verifica que `RAPIDAPI_KEY` sea correcta y que tu suscripción a Sky Scrapper en RapidAPI esté activa.
 
 ### Módulo no encontrado
 
@@ -376,13 +341,13 @@ ModuleNotFoundError: No module named 'streamlit'
 ### Límite de API excedido
 
 ```
-Error 429: Too Many Requests
+APIError: Rate limit de RapidAPI excedido
 ```
 
-**Solución**: Has alcanzado el límite de llamadas gratuitas de Amadeus (2,000/mes). Opciones:
+**Solución**: Has alcanzado el límite de tu plan de Sky Scrapper en RapidAPI. Opciones:
 - Espera hasta el próximo período de facturación
 - Usa el **Modo Demo** para continuar probando
-- Considera actualizar tu plan de Amadeus
+- Considera actualizar tu plan en RapidAPI
 
 ### Error en gráfico scatter
 
@@ -436,8 +401,8 @@ Este proyecto es de código abierto y está disponible bajo la licencia MIT.
 
 - **Repositorio**: [github.com/alemeds/flight-scan](https://github.com/alemeds/flight-scan)
 - **Aplicación**: [flight-scan.streamlit.app](https://flight-scan.streamlit.app)
-- **Amadeus API**: [developers.amadeus.com](https://developers.amadeus.com)
-- **Render**: [render.com](https://render.com)
+- **Sky Scrapper API**: [rapidapi.com/apiheya/api/sky-scrapper](https://rapidapi.com/apiheya/api/sky-scrapper)
+- **gspread**: [docs.gspread.org](https://docs.gspread.org)
 - **Documentación de Streamlit**: [docs.streamlit.io](https://docs.streamlit.io)
 
 ## 📧 Contacto
